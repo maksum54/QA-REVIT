@@ -28,6 +28,8 @@ public partial class DashboardWindow : Window
 
     private List<KopRow> _kopRows = new();
     private List<TitleBlockOption> _titleBlocks = new();
+    private List<IssueRow> _issueRows = new();
+    private IssueData? _issues;
 
     private readonly RevitTaskRunner _runner;
     private AddinSettings _settings;
@@ -76,12 +78,13 @@ public partial class DashboardWindow : Window
         try
         {
             Status("Membaca sheet dari model…");
-            var (sheets, titleBlocks) = await _runner.Run(app =>
+            var (sheets, titleBlocks, issues) = await _runner.Run(app =>
             {
                 var doc = app.ActiveUIDocument.Document;
-                return (SheetCollector.Collect(doc), TitleBlockService.GetTypes(doc));
+                return (SheetCollector.Collect(doc), TitleBlockService.GetTypes(doc), IssueService.Collect(doc));
             });
             UpdateTitleBlocks(titleBlocks, sheets);
+            UpdateIssues(issues);
             _report = new RuleEngine().Run(sheets, _config);
             if (_register is not null) _changes = RegisterComparer.Compare(_register, sheets, _config);
 
@@ -191,6 +194,100 @@ public partial class DashboardWindow : Window
             await RunQaAsync();
         }
         catch (Exception ex) { Error("Ganti kop gagal", ex); }
+    }
+
+    // ---------- Issue / Revisi ----------
+
+    private void UpdateIssues(IssueData data)
+    {
+        var keepRev = (IssueRevCombo.SelectedItem as RevisionOption)?.Id;
+        var wasSelected = _issueRows.Where(r => r.Selected).Select(r => r.UniqueId).ToHashSet();
+
+        _issues = data;
+        _issueRows = data.Sheets;
+        foreach (var r in _issueRows) r.Selected = wasSelected.Contains(r.UniqueId);
+        IssueColCombo.ItemsSource = data.Columns;
+        IssueRevCombo.ItemsSource = data.Revisions;
+        // Default: revisi terbaru.
+        IssueRevCombo.SelectedItem = data.Revisions.FirstOrDefault(r => r.Id == keepRev) ?? data.Revisions.LastOrDefault();
+        if (IssueApvBox.Text.Length == 0) IssueApvBox.Text = data.Approver;
+        IssueInfo.Text = data.Columns.Count == 0
+            ? "Sheet list dengan kolom 'ACT ISSUE NN' tidak ditemukan: hanya revisi, SUB_REV / REV_NOTE dan APVD yang diisi."
+            : $"Centang sheet, pilih revisi, lalu Terapkan Issue. Kolom issue dibaca dari schedule '{data.ScheduleName}'.";
+        ApplyIssueFilter();
+    }
+
+    private void IssueRev_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_issues is null || IssueRevCombo.SelectedItem is not RevisionOption rev) return;
+        // Kolom yang judulnya tanggal revisi; kalau belum ada, kolom kosong pertama.
+        IssueColCombo.SelectedItem = _issues.Columns.FirstOrDefault(c => c.Heading == rev.Date)
+            ?? _issues.Columns.FirstOrDefault(c => c.IsFree);
+    }
+
+    private void IssueFilter_Changed(object sender, RoutedEventArgs e)
+    {
+        if (IssueSearchHint is not null)
+            IssueSearchHint.Visibility = IssueSearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ApplyIssueFilter();
+    }
+
+    private IEnumerable<IssueRow> VisibleIssueRows()
+    {
+        var q = IssueSearchBox.Text.Trim();
+        return q.Length == 0 ? _issueRows : _issueRows.Where(r =>
+            r.Number.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            r.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            r.Status.Contains(q, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ApplyIssueFilter()
+    {
+        IssueGrid.ItemsSource = VisibleIssueRows().ToList();
+        UpdateIssueCount();
+    }
+
+    private void UpdateIssueCount() => IssueCount.Text = $"{_issueRows.Count(r => r.Selected)} dipilih dari {_issueRows.Count}";
+
+    private void IssueSelectAll_Click(object sender, RoutedEventArgs e) => SetIssueSelected(true);
+    private void IssueClear_Click(object sender, RoutedEventArgs e) => SetIssueSelected(false);
+
+    private void SetIssueSelected(bool value)
+    {
+        foreach (var r in value ? VisibleIssueRows() : _issueRows) r.Selected = value;
+        IssueGrid.Items.Refresh();
+        UpdateIssueCount();
+    }
+
+    private async void IssueGoTo_Click(object sender, RoutedEventArgs e)
+    {
+        if (IssueGrid.SelectedItem is IssueRow row) await GoToAsync(row.UniqueId);
+    }
+
+    private async void ApplyIssue_Click(object sender, RoutedEventArgs e)
+    {
+        IssueGrid.CommitEdit();
+        var targets = _issueRows.Where(r => r.Selected).ToList();
+        if (targets.Count == 0) targets = IssueGrid.SelectedItems.OfType<IssueRow>().ToList();
+        if (targets.Count == 0) { Status("Centang sheet yang akan di-issue."); return; }
+        if (_issues is null || IssueRevCombo.SelectedItem is not RevisionOption rev) { Status("Pilih revisi dulu."); return; }
+
+        var column = IssueColCombo.SelectedItem as IssueColumn;
+        var note = IssueNoteBox.Text.Trim();
+        var approver = IssueApvBox.Text.Trim();
+        var summary = $"Terapkan ke {targets.Count} sheet?\n\nRevisi: {rev.Label}\nKolom sheet list: {column?.Label ?? "—"}" +
+                      $"\nNote: {(note.Length == 0 ? "—" : note)}\nAPVD: {(approver.Length == 0 ? "—" : approver)}";
+        if (MessageBox.Show(this, summary, "QA Revit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        try
+        {
+            var ids = targets.Select(t => t.UniqueId).ToList();
+            var scheduleId = _issues.ScheduleId;
+            var result = await _runner.Run(app =>
+                IssueService.Apply(app.ActiveUIDocument.Document, ids, rev.Id, column, scheduleId, note, approver));
+            ShowApplyResult(result);
+            await RunQaAsync();
+        }
+        catch (Exception ex) { Error("Issue gagal", ex); }
     }
 
     private async void RunQa_Click(object sender, RoutedEventArgs e) => await RunQaAsync();

@@ -15,6 +15,10 @@ Add-in Revit 2025 untuk QA/QC sheet gambar ME (elektrikal & elektronik), terinsp
   (posisi dan parameter tetap); sheet tanpa kop diberi kop baru.
 - **Kop untuk sheet baru dari Excel**: pilih *Kop sheet baru* di tab Register. Jika Excel punya kolom
   `KOP` / `TITLE BLOCK` (isi `Family : Type`, nama family, atau nama type), kop per baris itu yang dipakai.
+- **Issue / Revisi sekali klik**: tab *Issue / Revisi*. Centang sheet, pilih revisi, isi note dan inisial
+  approver, *Terapkan Issue*. Revisi ditempel ke sheet, kolom `*ACT ISSUE NN` di sheet list dicentang
+  (kolom dicari dari judul kolom = tanggal revisi; kolom kosong diberi judul tanggal itu), `SUB_REV` /
+  `REV_NOTE` dan `N APV` di kop terisi. Kolom STATUS menandai sheet yang centangnya tidak cocok dengan revisinya.
 - **Ganti Stage massal** (mis. BD → DD) dengan preview.
 - **Dashboard**: Total / Passed / Failed / Pass rate, Go To sheet (double-click), Fix otomatis, Refresh.
 - **Advice**:
