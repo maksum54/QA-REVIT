@@ -18,7 +18,10 @@ Add-in Revit 2025 untuk QA/QC sheet gambar ME (elektrikal & elektronik), terinsp
 - **Issue / Revisi sekali klik**: tab *Issue / Revisi*. Centang sheet, pilih revisi, isi note dan inisial
   approver, *Terapkan Issue*. Revisi ditempel ke sheet, kolom `*ACT ISSUE NN` di sheet list dicentang
   (kolom dicari dari judul kolom = tanggal revisi; kolom kosong diberi judul tanggal itu), `SUB_REV` /
-  `REV_NOTE` dan `N APV` di kop terisi. Kolom STATUS menandai sheet yang centangnya tidak cocok dengan revisinya.
+  `REV_NOTE` dan `N APV` di kop terisi. *Batalkan Issue* adalah kebalikannya (mis. sheet terlanjur C padahal masih B).
+  Per sheet: klik sel *Revisi di sheet* / *Kolom tercentang* untuk memilih lewat popup, klik *Status* untuk
+  menyamakan centang ↔ revisi, klik dua kali Nomor / Judul / Note untuk mengetik langsung. *Hapus Sheet* menghapus
+  sheet tercentang.
 - **Ganti Stage massal** (mis. BD → DD) dengan preview.
 - **Dashboard**: Total / Passed / Failed / Pass rate, Go To sheet (double-click), Fix otomatis, Refresh.
 - **Advice**:

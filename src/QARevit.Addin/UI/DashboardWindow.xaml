@@ -254,43 +254,105 @@
                         <DockPanel>
                             <Border DockPanel.Dock="Top" Padding="14,12" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
                                 <StackPanel>
-                                    <TextBlock x:Name="IssueInfo" TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,0,0,10"
-                                               Text="Centang sheet, pilih revisi, lalu Terapkan Issue: revisi ditempel ke sheet, kolom sheet list dicentang, SUB_REV / REV_NOTE dan APVD di kop terisi." />
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                        <TextBlock Text="Revisi" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource Muted}" />
-                                        <ComboBox x:Name="IssueRevCombo" Width="270" DisplayMemberPath="Label" Margin="0,0,12,0" VerticalContentAlignment="Center"
-                                                  SelectionChanged="IssueRev_Changed" />
-                                        <TextBlock Text="Kolom sheet list" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource Muted}" />
-                                        <ComboBox x:Name="IssueColCombo" Width="150" DisplayMemberPath="Label" Margin="0,0,12,0" VerticalContentAlignment="Center"
-                                                  ToolTip="Dipilih otomatis dari tanggal revisi. Kolom kosong akan diberi judul tanggal revisi." />
-                                        <TextBlock Text="Note" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource Muted}" />
-                                        <TextBox x:Name="IssueNoteBox" Width="230" Margin="0,0,12,0" ToolTip="REV_NOTE di kop, mis. CHANGE ROUTE. Kosongkan untuk first issue." />
-                                        <TextBlock Text="APVD" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource Muted}" />
-                                        <TextBox x:Name="IssueApvBox" Width="60" ToolTip="Inisial approver untuk baris revisi ini di kop." />
+                                    <!-- Issue banyak sheet sekaligus: isi dari kiri ke kanan -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="1 · REVISI" Style="{StaticResource KpiLabel}" Margin="0,0,0,4" />
+                                            <ComboBox x:Name="IssueRevCombo" Width="260" DisplayMemberPath="Label" VerticalContentAlignment="Center"
+                                                      SelectionChanged="IssueRev_Changed" />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="2 · KOLOM SHEET LIST" Style="{StaticResource KpiLabel}" Margin="0,0,0,4" />
+                                            <ComboBox x:Name="IssueColCombo" Width="150" DisplayMemberPath="Label" VerticalContentAlignment="Center"
+                                                      ToolTip="Dipilih otomatis dari tanggal revisi. Kolom kosong akan diberi judul tanggal revisi." />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="3 · NOTE (BOLEH KOSONG)" Style="{StaticResource KpiLabel}" Margin="0,0,0,4" />
+                                            <TextBox x:Name="IssueNoteBox" Width="220" ToolTip="REV_NOTE di kop, mis. CHANGE ROUTE. Kosongkan untuk first issue." />
+                                        </StackPanel>
+                                        <StackPanel Margin="0,0,12,0">
+                                            <TextBlock Text="4 · APVD" Style="{StaticResource KpiLabel}" Margin="0,0,0,4" />
+                                            <TextBox x:Name="IssueApvBox" Width="60" ToolTip="Inisial approver untuk baris revisi ini di kop." />
+                                        </StackPanel>
+                                        <Button Style="{StaticResource PrimaryButton}" Content="✔ Terapkan Issue" Click="ApplyIssue_Click" VerticalAlignment="Bottom"
+                                                ToolTip="Tempel revisi ini ke sheet tercentang, centang kolom sheet list, isi SUB_REV / REV_NOTE / APVD." />
+                                        <Button Content="↶ Batalkan Issue" Click="CancelIssue_Click" VerticalAlignment="Bottom"
+                                                ToolTip="Kebalikan Terapkan Issue: lepas revisi ini dari sheet tercentang (mis. terlanjur jadi C padahal masih B)." />
                                     </StackPanel>
                                     <DockPanel>
                                         <Grid DockPanel.Dock="Right" Width="220">
                                             <TextBox x:Name="IssueSearchBox" TextChanged="IssueFilter_Changed" />
-                                            <TextBlock x:Name="IssueSearchHint" Text="🔍  Cari sheet…" Foreground="#98A2B3" Margin="10,0,0,0"
+                                            <TextBlock x:Name="IssueSearchHint" Text="🔍  Cari sheet / status…" Foreground="#98A2B3" Margin="10,0,0,0"
                                                        VerticalAlignment="Center" IsHitTestVisible="False" />
                                         </Grid>
                                         <StackPanel Orientation="Horizontal">
-                                            <Button Style="{StaticResource PrimaryButton}" Content="Terapkan Issue" Click="ApplyIssue_Click" />
                                             <Button Content="Pilih Semua" Click="IssueSelectAll_Click" />
                                             <Button Content="Kosongkan" Click="IssueClear_Click" />
+                                            <Button Style="{StaticResource DarkButton}" Content="Buka Sheet" Click="IssueGoTo_Click" />
+                                            <Button Style="{StaticResource DangerButton}" Content="🗑 Hapus Sheet" Click="DeleteSheets_Click" />
                                             <TextBlock x:Name="IssueCount" VerticalAlignment="Center" Foreground="{StaticResource Muted}" Margin="4,0,12,0" />
                                         </StackPanel>
                                     </DockPanel>
+                                    <TextBlock x:Name="IssueInfo" TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,10,0,0" />
+
+                                    <Popup x:Name="PickPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True">
+                                        <Border Background="White" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Padding="14"
+                                                MinWidth="300" MaxWidth="380" Margin="0,2,0,0">
+                                            <StackPanel>
+                                                <TextBlock x:Name="PickTitle" FontWeight="Bold" Foreground="{StaticResource Text}" TextWrapping="Wrap" />
+                                                <TextBlock x:Name="PickHint" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,8" />
+                                                <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto">
+                                                    <ItemsControl x:Name="PickList">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <CheckBox Content="{Binding Label}" IsChecked="{Binding Checked}" Margin="0,4" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                                    <Button Style="{StaticResource PrimaryButton}" Content="Terapkan" Click="PickApply_Click" />
+                                                    <Button Content="Batal" Click="PickCancel_Click" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </Popup>
                                 </StackPanel>
                             </Border>
-                            <DataGrid x:Name="IssueGrid" AutoGenerateColumns="False" CanUserAddRows="False" MouseDoubleClick="IssueGoTo_Click">
+                            <DataGrid x:Name="IssueGrid" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                      CellEditEnding="IssueGrid_CellEditEnding">
                                 <DataGrid.Columns>
                                     <DataGridCheckBoxColumn Header="" Binding="{Binding Selected, UpdateSourceTrigger=PropertyChanged}" Width="36" />
-                                    <DataGridTextColumn Header="NOMOR SHEET" Binding="{Binding Number}" Width="230" IsReadOnly="True" FontWeight="SemiBold" />
-                                    <DataGridTextColumn Header="JUDUL" Binding="{Binding Name}" Width="2*" IsReadOnly="True" ElementStyle="{StaticResource WrapText}" />
-                                    <DataGridTextColumn Header="REVISI DI SHEET" Binding="{Binding Revisions}" Width="1.3*" IsReadOnly="True" ElementStyle="{StaticResource WrapText}" />
-                                    <DataGridTextColumn Header="KOLOM TERCENTANG" Binding="{Binding Issues}" Width="1.3*" IsReadOnly="True" Foreground="#475467" ElementStyle="{StaticResource WrapText}" />
-                                    <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="140" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="NOMOR SHEET ✎" Binding="{Binding Number}" Width="220" FontWeight="SemiBold" />
+                                    <DataGridTextColumn Header="JUDUL ✎" Binding="{Binding Name}" Width="2*" ElementStyle="{StaticResource WrapText}" />
+                                    <DataGridTextColumn Header="NOTE ✎" Binding="{Binding Note}" Width="1.2*" ElementStyle="{StaticResource WrapText}" />
+                                    <DataGridTemplateColumn Header="REVISI DI SHEET" Width="1.4*" IsReadOnly="True">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource CellButton}" Click="PickRevisions_Click" ToolTip="Klik untuk memilih revisi di sheet ini">
+                                                    <TextBlock Text="{Binding Revisions}" TextWrapping="Wrap" />
+                                                </Button>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="KOLOM TERCENTANG" Width="1.4*" IsReadOnly="True">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource CellButton}" Click="PickColumns_Click" ToolTip="Klik untuk memilih kolom sheet list yang dicentang">
+                                                    <TextBlock Text="{Binding Issues}" TextWrapping="Wrap" Foreground="#475467" />
+                                                </Button>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="STATUS" Width="170" IsReadOnly="True">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource CellButton}" Click="Status_Click" ToolTip="Klik untuk memilih cara menyamakan centang dan revisi">
+                                                    <TextBlock Text="{Binding Status}" />
+                                                </Button>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
                                 </DataGrid.Columns>
                             </DataGrid>
                         </DockPanel>

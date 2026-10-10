@@ -211,9 +211,12 @@ public partial class DashboardWindow : Window
         // Default: revisi terbaru.
         IssueRevCombo.SelectedItem = data.Revisions.FirstOrDefault(r => r.Id == keepRev) ?? data.Revisions.LastOrDefault();
         if (IssueApvBox.Text.Length == 0) IssueApvBox.Text = data.Approver;
-        IssueInfo.Text = data.Columns.Count == 0
-            ? "Sheet list dengan kolom 'ACT ISSUE NN' tidak ditemukan: hanya revisi, SUB_REV / REV_NOTE dan APVD yang diisi."
-            : $"Centang sheet, pilih revisi, lalu Terapkan Issue. Kolom issue dibaca dari schedule '{data.ScheduleName}'.";
+        IssueInfo.Text =
+            "Banyak sheet: centang sheet, isi 1–4, klik Terapkan Issue.  Satu sheet: klik sel REVISI DI SHEET, KOLOM TERCENTANG atau STATUS." +
+            "  Ketik langsung: klik dua kali NOMOR, JUDUL atau NOTE, lalu Enter.  " +
+            (data.Columns.Count == 0
+                ? "Sheet list dengan kolom 'ACT ISSUE NN' tidak ditemukan, jadi kolom sheet list tidak diisi."
+                : $"Kolom issue dibaca dari schedule '{data.ScheduleName}'.");
         ApplyIssueFilter();
     }
 
@@ -266,9 +269,7 @@ public partial class DashboardWindow : Window
 
     private async void ApplyIssue_Click(object sender, RoutedEventArgs e)
     {
-        IssueGrid.CommitEdit();
-        var targets = _issueRows.Where(r => r.Selected).ToList();
-        if (targets.Count == 0) targets = IssueGrid.SelectedItems.OfType<IssueRow>().ToList();
+        var targets = IssueTargets();
         if (targets.Count == 0) { Status("Centang sheet yang akan di-issue."); return; }
         if (_issues is null || IssueRevCombo.SelectedItem is not RevisionOption rev) { Status("Pilih revisi dulu."); return; }
 
@@ -288,6 +289,180 @@ public partial class DashboardWindow : Window
             await RunQaAsync();
         }
         catch (Exception ex) { Error("Issue gagal", ex); }
+    }
+
+    /// <summary>Sheet tercentang; tanpa centang, baris yang sedang di-highlight.</summary>
+    private List<IssueRow> IssueTargets()
+    {
+        IssueGrid.CommitEdit();
+        var targets = _issueRows.Where(r => r.Selected).ToList();
+        return targets.Count > 0 ? targets : IssueGrid.SelectedItems.OfType<IssueRow>().ToList();
+    }
+
+    private async Task RunStatesAsync(List<SheetState> states)
+    {
+        if (_issues is null || states.Count == 0) return;
+        try
+        {
+            var columns = _issues.Columns;
+            var approver = IssueApvBox.Text.Trim();
+            var result = await _runner.Run(app => IssueService.SetStates(app.ActiveUIDocument.Document, states, columns, approver));
+            ShowApplyResult(result);
+            await RunQaAsync();
+        }
+        catch (Exception ex) { Error("Ubah revisi gagal", ex); }
+    }
+
+    private async void CancelIssue_Click(object sender, RoutedEventArgs e)
+    {
+        if (_issues is null || IssueRevCombo.SelectedItem is not RevisionOption rev) { Status("Pilih revisi dulu."); return; }
+        var targets = IssueTargets().Where(t => t.RevisionIds.Contains(rev.Id)).ToList();
+        if (targets.Count == 0) { Status("Tidak ada sheet terpilih yang memakai revisi itu."); return; }
+        if (MessageBox.Show(this, $"Lepas revisi dari {targets.Count} sheet?\n\nRevisi: {rev.Label}\n\n" +
+                "Centang kolom sheet list untuk tanggal itu ikut dilepas, SUB_REV kembali ke revisi sebelumnya dan REV_NOTE dikosongkan.",
+                "QA Revit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+
+        var dateOf = _issues.Revisions.ToDictionary(r => r.Id, r => r.Date);
+        var column = _issues.Columns.FirstOrDefault(c => c.Heading == rev.Date);
+        await RunStatesAsync(targets.Select(t =>
+        {
+            var keep = t.RevisionIds.Where(id => id != rev.Id).ToList();
+            // Kolom tanggal itu tetap dicentang kalau masih ada revisi lain bertanggal sama di sheet.
+            var untick = column is not null && !keep.Any(id => dateOf.GetValueOrDefault(id) == rev.Date);
+            return new SheetState(t.UniqueId, keep, untick ? t.Ticked.Where(n => n != column!.Number).ToList() : null);
+        }).ToList());
+    }
+
+    private async void DeleteSheets_Click(object sender, RoutedEventArgs e)
+    {
+        var targets = IssueTargets();
+        if (targets.Count == 0) { Status("Centang sheet yang akan dihapus."); return; }
+        var list = string.Join("\n", targets.Take(10).Select(t => $"{t.Number}  {t.Name}")) + (targets.Count > 10 ? "\n…" : "");
+        if (MessageBox.Show(this, $"Hapus {targets.Count} sheet dari model?\n\n{list}\n\nView di dalamnya tidak ikut terhapus. Bisa dibatalkan dengan Undo di Revit.",
+                "QA Revit", MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
+        try
+        {
+            var ids = targets.Select(t => t.UniqueId).ToList();
+            var result = await _runner.Run(app => IssueService.Delete(app.ActiveUIDocument.Document, ids));
+            ShowApplyResult(result);
+            await RunQaAsync();
+        }
+        catch (Exception ex) { Error("Hapus sheet gagal", ex); }
+    }
+
+    // Ketik langsung di tabel: nomor, judul, note.
+    private void IssueGrid_CellEditEnding(object? sender, System.Windows.Controls.DataGridCellEditEndingEventArgs e)
+    {
+        if (e.EditAction != System.Windows.Controls.DataGridEditAction.Commit || e.Row.Item is not IssueRow row ||
+            e.EditingElement is not System.Windows.Controls.TextBox box) return;
+        var header = e.Column.Header as string ?? "";
+        var (old, value) = (header.StartsWith("NOMOR") ? row.Number : header.StartsWith("JUDUL") ? row.Name : row.Note, box.Text.Trim());
+        if (value == old) return;
+        if (value.Length == 0 && !header.StartsWith("NOTE")) { e.Cancel = true; Status("Nomor dan judul tidak boleh kosong."); return; }
+
+        var (id, number) = (row.UniqueId, row.Number);
+        // Tunda sampai grid selesai commit; tabel tidak boleh di-refresh di tengah edit.
+        Dispatcher.BeginInvoke(async () =>
+        {
+            try
+            {
+                var result = await _runner.Run(app =>
+                {
+                    var doc = app.ActiveUIDocument.Document;
+                    if (header.StartsWith("NOTE")) return IssueService.SetNote(doc, id, value);
+                    var renumber = header.StartsWith("NOMOR");
+                    return SheetEditor.Apply(doc, new[]
+                    {
+                        new SheetChange
+                        {
+                            Kind = renumber ? ChangeKind.RenumberSheet : ChangeKind.RenameSheet, UniqueId = id, Number = number,
+                            NewNumber = renumber ? value : null, NewName = renumber ? null : value,
+                        },
+                    }, "QA Revit - Edit Sheet");
+                });
+                ShowApplyResult(result);
+                await RunQaAsync();
+            }
+            catch (Exception ex) { Error("Edit sheet gagal", ex); }
+        });
+    }
+
+    // ---------- Pilihan per sheet (popup) ----------
+
+    public sealed class PickItem
+    {
+        public bool Checked { get; set; }
+        public string Label { get; init; } = "";
+        public string Key { get; init; } = "";
+    }
+
+    private IssueRow? _pickRow;
+    private bool _pickRevisions;
+
+    private void PickRevisions_Click(object sender, RoutedEventArgs e) => OpenPick(sender, revisions: true);
+    private void PickColumns_Click(object sender, RoutedEventArgs e) => OpenPick(sender, revisions: false);
+
+    private void OpenPick(object sender, bool revisions)
+    {
+        if (_issues is null || (sender as FrameworkElement)?.DataContext is not IssueRow row) return;
+        if (!revisions && _issues.Columns.Count == 0) { Status("Sheet list dengan kolom 'ACT ISSUE NN' tidak ditemukan."); return; }
+        (_pickRow, _pickRevisions) = (row, revisions);
+        PickTitle.Text = (revisions ? "Revisi di sheet " : "Kolom sheet list untuk ") + row.Number;
+        PickHint.Text = revisions
+            ? "Centang revisi yang harus ada di sheet ini. Lepas centang untuk membatalkan revisi (mis. terlanjur C padahal masih B)."
+            : "Centang kolom tanggal issue yang harus terisi untuk sheet ini.";
+        PickList.ItemsSource = revisions
+            ? _issues.Revisions.Select(r => new PickItem { Key = r.Id.ToString(), Label = r.Label, Checked = row.RevisionIds.Contains(r.Id) }).ToList()
+            : _issues.Columns.Select(c => new PickItem { Key = c.Number, Label = c.Label, Checked = row.Ticked.Contains(c.Number) }).ToList();
+        PickPopup.PlacementTarget = (UIElement)sender;
+        PickPopup.IsOpen = true;
+    }
+
+    private void PickCancel_Click(object sender, RoutedEventArgs e) => PickPopup.IsOpen = false;
+
+    private async void PickApply_Click(object sender, RoutedEventArgs e)
+    {
+        PickPopup.IsOpen = false;
+        if (_pickRow is null || PickList.ItemsSource is not List<PickItem> items) return;
+        var keys = items.Where(i => i.Checked).Select(i => i.Key).ToList();
+        await RunStatesAsync(new List<SheetState>
+        {
+            _pickRevisions
+                ? new SheetState(_pickRow.UniqueId, keys.Select(long.Parse).ToList(), null)
+                : new SheetState(_pickRow.UniqueId, null, keys),
+        });
+    }
+
+    private void Status_Click(object sender, RoutedEventArgs e)
+    {
+        if (_issues is null || sender is not FrameworkElement cell || cell.DataContext is not IssueRow row) return;
+        if (row.Synced) { Status($"{row.Number}: centang sheet list sudah cocok dengan revisinya."); return; }
+
+        var data = _issues;
+        var byRevisions = new System.Windows.Controls.MenuItem { Header = "Revisi yang benar → samakan centang kolom sheet list" };
+        byRevisions.Click += async (_, _) =>
+        {
+            var dates = data.Revisions.Where(r => row.RevisionIds.Contains(r.Id)).Select(r => r.Date).ToHashSet();
+            await RunStatesAsync(new List<SheetState>
+            {
+                new(row.UniqueId, null, data.Columns.Where(c => !c.IsFree && dates.Contains(c.Heading)).Select(c => c.Number).ToList()),
+            });
+        };
+        var byColumns = new System.Windows.Controls.MenuItem { Header = "Centang yang benar → samakan revisi di sheet" };
+        byColumns.Click += async (_, _) =>
+        {
+            var ids = new List<long>();
+            foreach (var column in data.Columns.Where(c => row.Ticked.Contains(c.Number)))
+            {
+                // Beberapa revisi bisa bertanggal sama: pertahankan yang sudah di sheet, kalau belum ada ambil yang pertama.
+                var sameDate = data.Revisions.Where(r => r.Date == column.Heading).ToList();
+                var onSheet = sameDate.Where(r => row.RevisionIds.Contains(r.Id)).ToList();
+                ids.AddRange((onSheet.Count > 0 ? onSheet : sameDate.Take(1)).Select(r => r.Id));
+            }
+            await RunStatesAsync(new List<SheetState> { new(row.UniqueId, ids, null) });
+        };
+        cell.ContextMenu = new System.Windows.Controls.ContextMenu { Items = { byRevisions, byColumns }, PlacementTarget = cell,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom, IsOpen = true };
     }
 
     private async void RunQa_Click(object sender, RoutedEventArgs e) => await RunQaAsync();

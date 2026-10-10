@@ -21,12 +21,20 @@ public sealed class IssueRow
 {
     public bool Selected { get; set; }
     public string UniqueId { get; init; } = "";
-    public string Number { get; init; } = "";
-    public string Name { get; init; } = "";
+    public string Number { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Note { get; set; } = "";
     public string Revisions { get; init; } = "";
     public string Issues { get; init; } = "";
     public string Status { get; init; } = "";
+    public bool Synced => Status == "OK";
+    public List<long> RevisionIds { get; init; } = new();
+    /// <summary>Nomor kolom issue ("00", "01", ...) yang tercentang.</summary>
+    public List<string> Ticked { get; init; } = new();
 }
+
+/// <summary>Keadaan yang diinginkan untuk satu sheet. Null = bagian itu tidak diubah.</summary>
+public sealed record SheetState(string UniqueId, IReadOnlyCollection<long>? RevisionIds, IReadOnlyCollection<string>? Columns);
 
 public sealed record IssueData(List<RevisionOption> Revisions, List<IssueColumn> Columns, List<IssueRow> Sheets,
     long ScheduleId, string ScheduleName, string Approver);
@@ -60,6 +68,9 @@ public static class IssueService
                 UniqueId = sheet.UniqueId,
                 Number = sheet.SheetNumber,
                 Name = sheet.Name,
+                Note = sheet.GetParameters("REV_NOTE").Select(p => p.AsString()).LastOrDefault(v => !string.IsNullOrEmpty(v)) ?? "",
+                RevisionIds = onSheet.Select(r => r.Id.Value).ToList(),
+                Ticked = ticked.Select(c => c.Number).ToList(),
                 Revisions = string.Join(", ", onSheet.Select(r => $"{sheet.GetRevisionNumberOnSheet(r.Id)} {r.RevisionDate}")),
                 Issues = string.Join(", ", ticked.Select(c => c.IsFree ? c.Number : c.Heading)),
                 Status = synced ? "OK" : "⚠ centang ≠ revisi",
@@ -164,6 +175,97 @@ public static class IssueService
                     def.GetField(i).ColumnHeading = rev.RevisionDate;
         }
 
+        tx.Commit();
+        return result;
+    }
+
+    /// <summary>
+    /// Atur persis revisi mana yang menempel di sheet dan kolom issue mana yang tercentang (null = tidak diubah).
+    /// Dipakai untuk koreksi per sheet, sinkronisasi centang ↔ revisi, dan membatalkan issue.
+    /// </summary>
+    public static ApplyResult SetStates(Document doc, IReadOnlyList<SheetState> states, IReadOnlyList<IssueColumn> columns, string approver)
+    {
+        var result = new ApplyResult();
+        using var tx = new Transaction(doc, "QA Revit - Ubah Revisi Sheet");
+        tx.Start();
+
+        var touched = new List<(ViewSheet Sheet, SheetState State, ElementId Before)>();
+        foreach (var state in states)
+        {
+            if (doc.GetElement(state.UniqueId) is not ViewSheet sheet) { result.Errors.Add($"{state.UniqueId}: sheet tidak ditemukan."); continue; }
+            try
+            {
+                var before = sheet.GetCurrentRevision();
+                if (state.RevisionIds is not null)
+                    sheet.SetAdditionalRevisionIds(state.RevisionIds.Select(id => new ElementId(id)).ToList());
+                if (state.Columns is not null)
+                    foreach (var c in columns)
+                        sheet.LookupParameter(c.ParamName)?.Set(state.Columns.Contains(c.Number) ? 1 : 0);
+                touched.Add((sheet, state, before));
+            }
+            catch (Exception ex) { result.Errors.Add($"{sheet.SheetNumber}: {ex.Message}"); }
+        }
+
+        doc.Regenerate();
+
+        foreach (var (sheet, state, before) in touched)
+        {
+            try
+            {
+                if (state.RevisionIds is not null)
+                {
+                    var onSheet = RevisionsOn(doc, sheet);
+                    foreach (var stuck in onSheet.Where(r => !state.RevisionIds.Contains(r.Id.Value)))
+                        result.Errors.Add($"{sheet.SheetNumber}: revisi {stuck.RevisionDate} masih menempel karena ada revision cloud di sheet/view. Hapus cloud-nya dulu.");
+
+                    // Baris APVD mengikuti urutan revisi: kosongkan baris sisa, isi baris baru.
+                    for (var row = 1; row <= ApproverRows; row++)
+                    {
+                        if (row > onSheet.Count) SetText(sheet, $"{row} APV", "");
+                        else if (approver.Length > 0 && string.IsNullOrEmpty(sheet.LookupParameter($"{row} APV")?.AsString()))
+                            SetText(sheet, $"{row} APV", approver);
+                    }
+
+                    var current = sheet.GetCurrentRevision();
+                    if (current != before)
+                    {
+                        SetText(sheet, "SUB_REV", current == ElementId.InvalidElementId ? "" : sheet.GetRevisionNumberOnSheet(current) ?? "");
+                        SetText(sheet, "REV_NOTE", ""); // note lama milik revisi yang sudah bukan revisi terakhir
+                    }
+                }
+                result.Applied++;
+            }
+            catch (Exception ex) { result.Errors.Add($"{sheet.SheetNumber}: {ex.Message}"); }
+        }
+
+        tx.Commit();
+        return result;
+    }
+
+    public static ApplyResult SetNote(Document doc, string sheetUniqueId, string note)
+    {
+        var result = new ApplyResult();
+        if (doc.GetElement(sheetUniqueId) is not ViewSheet sheet) { result.Errors.Add("Sheet tidak ditemukan."); return result; }
+        using var tx = new Transaction(doc, "QA Revit - REV_NOTE");
+        tx.Start();
+        if (SetText(sheet, "REV_NOTE", note) == 0) result.Errors.Add($"{sheet.SheetNumber}: parameter REV_NOTE tidak ada.");
+        else result.Applied++;
+        tx.Commit();
+        return result;
+    }
+
+    public static ApplyResult Delete(Document doc, IEnumerable<string> sheetUniqueIds)
+    {
+        var result = new ApplyResult();
+        using var tx = new Transaction(doc, "QA Revit - Hapus Sheet");
+        tx.Start();
+        foreach (var id in sheetUniqueIds)
+        {
+            if (doc.GetElement(id) is not ViewSheet sheet) { result.Errors.Add($"{id}: sheet tidak ditemukan."); continue; }
+            var number = sheet.SheetNumber;
+            try { doc.Delete(sheet.Id); result.Applied++; }
+            catch (Exception ex) { result.Errors.Add($"{number}: {ex.Message}"); }
+        }
         tx.Commit();
         return result;
     }

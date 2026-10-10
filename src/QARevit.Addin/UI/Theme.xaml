@@ -92,6 +92,35 @@
         <Setter Property="BorderBrush" Value="{StaticResource Navy}" />
         <Setter Property="Foreground" Value="White" />
     </Style>
+    <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+        <Setter Property="Background" Value="{StaticResource BadSoft}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Bad}" />
+        <Setter Property="Foreground" Value="{StaticResource Bad}" />
+    </Style>
+    <!-- Sel tabel yang bisa diklik untuk membuka pilihan -->
+    <Style x:Key="CellButton" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="Transparent" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                            CornerRadius="6" Padding="8,4">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="▾" Foreground="{StaticResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="White" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <Style x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Background" Value="#22FFFFFF" />
         <Setter Property="BorderBrush" Value="#44FFFFFF" />
