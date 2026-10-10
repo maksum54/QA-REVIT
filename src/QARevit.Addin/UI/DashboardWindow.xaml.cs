@@ -343,7 +343,11 @@ public partial class DashboardWindow : Window
         var approver = IssueApvBox.Text.Trim();
         var summary = $"Terapkan ke {targets.Count} sheet?\n\nRevisi: {rev.Label}\nKolom sheet list: {column?.Label ?? "—"}" +
                       $"\nNote: {(note.Length == 0 ? "—" : note)}\nAPVD: {(approver.Length == 0 ? "—" : approver)}";
-        if (MessageBox.Show(this, summary, "QA Revit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        // Note kosong mengosongkan REV_NOTE di sheet yang baru mendapat revisi ini: sebutkan sebelum terjadi.
+        var wiped = note.Length > 0 ? 0 : targets.Count(t => t.Note.Length > 0 && !t.RevisionIds.Contains(rev.Id));
+        if (wiped > 0) summary += $"\n\n⚠ Note kosong: REV_NOTE yang sudah terisi di {wiped} sheet akan DIKOSONGKAN.";
+        if (MessageBox.Show(this, summary, "QA Revit", MessageBoxButton.OKCancel,
+                wiped > 0 ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.OK) return;
         try
         {
             var ids = targets.Select(t => t.UniqueId).ToList();

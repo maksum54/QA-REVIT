@@ -111,6 +111,12 @@ public static class RuleAdvice
         ["EMPTY-SHEET"] = "Sheet masih kosong",
         ["DC-READY"] = "Belum lengkap untuk issue DC",
         ["ZONE-COMPLETE"] = "Zona belum lengkap",
+        ["REV-SHEETLIST"] = "Drawing list tidak sinkron dengan revisi",
+        ["REV-CLOUD"] = "Revision cloud tidak sinkron dengan revisi",
+        ["REV-KOP"] = "Isian revisi di kop tidak sinkron",
+        ["REV-DATE"] = "Tanggal revisi mundur atau sheet belum di-issue",
+        ["SHEET-SETUP"] = "Sheet tidak masuk drawing list atau kop bermasalah",
+        ["DUP-TITLE"] = "Judul sheet kembar",
     };
 
     public static IReadOnlyList<RuleAdviceGroup> Groups(QaReport report) =>

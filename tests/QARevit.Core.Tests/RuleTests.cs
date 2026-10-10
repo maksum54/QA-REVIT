@@ -105,4 +105,81 @@ public class RuleTests
         Assert.Equal(2, report.Issues.Count(i => i.RuleId == "DUPLICATE"));
         Assert.Equal(0, report.Passed);
     }
+
+    private SheetInfo Issued(string number, string name, params SheetRevision[] revisions)
+    {
+        var s = Sheet(number, name);
+        s.Revisions = revisions.ToList();
+        s.TickedIssueDates = revisions.Select(r => r.Date).Distinct().ToList();
+        s.SubRevs = new List<string> { revisions[^1].Number };
+        s.RevNote = revisions.Length > 1 ? "CHANGE ROUTE" : "";
+        s.Approvers = Enumerable.Range(0, 6).Select(i => i < revisions.Length ? "DNY" : "").ToList();
+        s.TitleBlockCount = 1;
+        return s;
+    }
+
+    private static readonly SheetRevision A = new(3, "A", "30-09-2026", "FIRST ISSUE", 0);
+    private static readonly SheetRevision B = new(5, "B", "12-10-2026", "REVISION", 1);
+
+    [Fact]
+    public void Synced_revision_data_passes()
+    {
+        var report = Run(
+            Issued("KRF-DWG-BD-ME-01.1-LP-1101", "LIGHTING LAYOUT OFFICE GROUND FLOOR", A, B),
+            Issued("KRF-DWG-BD-ME-01.1-SO-1101", "RECEPTACLE LAYOUT OFFICE GROUND FLOOR", A),
+            Issued("KRF-DWG-BD-ME-01.1-EG-1101", "GROUNDING LAYOUT OFFICE GROUND FLOOR", A));
+        Assert.Empty(report.Issues);
+    }
+
+    [Fact]
+    public void Sheet_list_ticks_must_match_revisions()
+    {
+        var s = Issued("KRF-DWG-BD-ME-01.1-LP-1101", "LIGHTING LAYOUT OFFICE GROUND FLOOR", A, B);
+        s.TickedIssueDates = new List<string> { "30-09-2026" };
+        var issue = Assert.Single(Run(s).Issues, i => i.RuleId == "REV-SHEETLIST");
+        Assert.Equal(Severity.Warning, issue.Severity);
+    }
+
+    [Fact]
+    public void Cloud_left_on_old_revision_is_flagged()
+    {
+        // Sheet sudah revisi B, tetapi cloud-nya masih milik revisi A.
+        var stale = Issued("KRF-DWG-BD-ME-01.1-LP-1101", "LIGHTING LAYOUT OFFICE GROUND FLOOR", A with { Clouds = 1 }, B with { Clouds = 0 });
+        var issue = Assert.Single(Run(stale).Issues, i => i.RuleId == "REV-CLOUD");
+        Assert.Equal(Severity.Warning, issue.Severity);
+        Assert.Contains("masih milik revisi A", issue.Message);
+
+        var none = Issued("KRF-DWG-BD-ME-01.1-LP-1101", "LIGHTING LAYOUT OFFICE GROUND FLOOR", A, B with { Clouds = 0 });
+        Assert.Equal(Severity.Info, Assert.Single(Run(none).Issues, i => i.RuleId == "REV-CLOUD").Severity);
+    }
+
+    [Fact]
+    public void Title_block_revision_fields_must_follow_current_revision()
+    {
+        var s = Issued("KRF-DWG-BD-ME-01.1-LP-1101", "LIGHTING LAYOUT OFFICE GROUND FLOOR", A, B);
+        s.SubRevs = new List<string> { "B", "A" }; // dua parameter kembar, satu masih nilai lama
+        s.RevNote = "";
+        s.Approvers = new List<string> { "DNY", "", "", "", "", "" };
+        var issue = Assert.Single(Run(s).Issues, i => i.RuleId == "REV-KOP");
+        Assert.Contains("SUB_REV 'A' seharusnya 'B'", issue.Message);
+        Assert.Contains("REV_NOTE kosong", issue.Message);
+        Assert.Contains("APVD kosong di baris revisi B", issue.Message);
+    }
+
+    [Fact]
+    public void Backward_dates_unissued_sheets_setup_and_duplicate_titles_are_flagged()
+    {
+        var backward = Issued("KRF-DWG-BD-ME-01.1-LP-1101", "LIGHTING LAYOUT OFFICE GROUND FLOOR",
+            new SheetRevision(5, "A", "12-10-2026", "REVISION", 0), new SheetRevision(6, "B", "09-10-2026", "FIRST ISSUE", 1));
+        var twin = Issued("KRF-DWG-BD-ME-01.1-LP-1102", "LIGHTING LAYOUT OFFICE GROUND FLOOR", A);
+        twin.TitleBlockCount = 2;
+        twin.Parameters["Appears In Sheet List"] = "No";
+        var unissued = Sheet("KRF-DWG-BD-ME-01.1-SO-1101", "RECEPTACLE LAYOUT OFFICE GROUND FLOOR");
+        var report = Run(backward, twin, unissued, Issued("KRF-DWG-BD-ME-01.1-EG-1101", "GROUNDING LAYOUT OFFICE GROUND FLOOR", A));
+
+        Assert.Contains(report.Issues, i => i.RuleId == "REV-DATE" && i.SheetNumber == backward.Number && i.Message.Contains("mundur"));
+        Assert.Contains(report.Issues, i => i.RuleId == "REV-DATE" && i.SheetNumber == unissued.Number);
+        Assert.Equal(2, report.Issues.Count(i => i.RuleId == "SHEET-SETUP" && i.SheetNumber == twin.Number));
+        Assert.Equal(2, report.Issues.Count(i => i.RuleId == "DUP-TITLE"));
+    }
 }

@@ -27,6 +27,12 @@ public sealed class RuleEngine
         new EmptySheetRule(),
         new ConstructionStageRule(),
         new ZoneCompletenessRule(),
+        new SheetListSyncRule(),
+        new RevisionCloudRule(),
+        new TitleBlockRevisionRule(),
+        new RevisionDateRule(),
+        new SheetSetupRule(),
+        new DuplicateTitleRule(),
     };
 
     public QaReport Run(IReadOnlyList<SheetInfo> sheets, QaConfig cfg)

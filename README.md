@@ -62,6 +62,12 @@ Semua kode diatur di `src/QARevit.Core/Config/default-config.json`. Untuk proyek
 | EMPTY-SHEET | sheet tanpa view/schedule |
 | DC-READY | stage DC wajib punya revisi, tanggal, Checked/Approved By, tanpa revision cloud yang belum di-issue |
 | ZONE-COMPLETE | info: zona yang punya LP/SO/EG tetapi salah satunya belum ada |
+| REV-SHEETLIST | kolom tanggal tercentang di sheet list sama dengan revisi yang menempel di sheet |
+| REV-CLOUD | revisi terakhir punya revision cloud sendiri; cloud yang masih milik revisi lama = warning, tanpa cloud = info |
+| REV-KOP | `SUB_REV`, `REV_NOTE` dan `N APV` di kop cocok dengan revisi di sheet |
+| REV-DATE | tanggal revisi di satu sheet tidak mundur; sheet yang belum di-issue saat sheet lain sudah |
+| SHEET-SETUP | sheet masuk drawing list (Appears In Sheet List, ACT SHEET IN SCHEDULE / DISCIPLINE / SERIES) dan punya tepat satu kop |
+| DUP-TITLE | dua sheet dengan judul persis sama |
 
 ## Build & install
 Build dan test berjalan otomatis di GitHub Actions (`.github/workflows/build.yml`, runner Windows).

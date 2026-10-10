@@ -83,7 +83,7 @@ public static class IssueService
     }
 
     /// <summary>Sheet list yang judul kolom issue-nya paling banyak cocok dengan tanggal revisi.</summary>
-    private static (ViewSchedule?, List<IssueColumn>) FindColumns(Document doc, HashSet<string> revisionDates)
+    internal static (ViewSchedule?, List<IssueColumn>) FindColumns(Document doc, HashSet<string> revisionDates)
     {
         ViewSchedule? best = null;
         var bestColumns = new List<IssueColumn>();
@@ -108,7 +108,7 @@ public static class IssueService
         return (best, bestColumns);
     }
 
-    private static List<Revision> RevisionsOn(Document doc, ViewSheet sheet) =>
+    internal static List<Revision> RevisionsOn(Document doc, ViewSheet sheet) =>
         sheet.GetAllRevisionIds().Select(doc.GetElement).OfType<Revision>().OrderBy(r => r.SequenceNumber).ToList();
 
     public static ApplyResult Apply(Document doc, IEnumerable<string> sheetUniqueIds, long revisionId, IssueColumn? column,
