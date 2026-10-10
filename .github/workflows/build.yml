@@ -1,0 +1,47 @@
+name: Build QA Revit (Revit 2025)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore QARevit.sln
+
+      - name: Build
+        run: dotnet build QARevit.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/QARevit.Core.Tests/QARevit.Core.Tests.csproj -c Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Package add-in
+        shell: pwsh
+        run: |
+          $out = "artifacts/QARevit-Revit2025"
+          New-Item -ItemType Directory -Force "$out/QARevit" | Out-Null
+          $bin = "src/QARevit.Addin/bin/Release/net8.0-windows"
+          Copy-Item "$bin/*" "$out/QARevit" -Recurse -Exclude "QARevit.addin","RevitAPI*.dll","AdWindows.dll","UIFramework.dll"
+          Copy-Item "$bin/QARevit.addin" $out
+          Copy-Item "install.ps1" $out
+          Get-ChildItem $out -Recurse | Select-Object FullName, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QARevit-Revit2025
+          path: artifacts/QARevit-Revit2025
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: tests/**/TestResults/*.trx

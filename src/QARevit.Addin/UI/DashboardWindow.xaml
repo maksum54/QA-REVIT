@@ -1,0 +1,125 @@
+<Window x:Class="QARevit.Addin.UI.DashboardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="QA Revit — QC Agent Dashboard" Width="1100" Height="720"
+        MinWidth="800" MinHeight="500" WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI" FontSize="12">
+    <Window.Resources>
+        <Style x:Key="Stat" TargetType="Border">
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Background" Value="#F2F4F7" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="MinWidth" Value="80" />
+        </Style>
+    </Window.Resources>
+    <DockPanel Margin="10">
+        <!-- Ringkasan + aksi utama -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                <Border Style="{StaticResource Stat}">
+                    <StackPanel><TextBlock Text="Total" Foreground="Gray" /><TextBlock x:Name="TotalText" Text="-" FontSize="20" FontWeight="SemiBold" /></StackPanel>
+                </Border>
+                <Border Style="{StaticResource Stat}">
+                    <StackPanel><TextBlock Text="Passed" Foreground="Gray" /><TextBlock x:Name="PassedText" Text="-" FontSize="20" FontWeight="SemiBold" Foreground="#1E7B34" /></StackPanel>
+                </Border>
+                <Border Style="{StaticResource Stat}">
+                    <StackPanel><TextBlock Text="Failed" Foreground="Gray" /><TextBlock x:Name="FailedText" Text="-" FontSize="20" FontWeight="SemiBold" Foreground="#B42318" /></StackPanel>
+                </Border>
+                <Border Style="{StaticResource Stat}">
+                    <StackPanel><TextBlock Text="Pass rate" Foreground="Gray" /><TextBlock x:Name="RateText" Text="-" FontSize="20" FontWeight="SemiBold" /></StackPanel>
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button Content="Refresh QA" Click="RunQa_Click" FontWeight="SemiBold" />
+                <Button Content="Import Excel…" Click="ImportExcel_Click" />
+                <Button Content="Export Report…" Click="ExportReport_Click" />
+                <Button Content="Settings" Click="Settings_Click" />
+            </StackPanel>
+        </DockPanel>
+
+        <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Margin="0,6,0,0" Foreground="Gray" TextTrimming="CharacterEllipsis" />
+
+        <TabControl x:Name="Tabs">
+            <TabItem Header="Hasil QA">
+                <DockPanel Margin="6">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Content="Go To Sheet" Click="GoTo_Click" />
+                        <Button Content="Fix Terpilih" Click="FixSelected_Click" />
+                        <Button Content="Fix Semua (Otomatis)" Click="FixAll_Click" />
+                        <CheckBox x:Name="HideInfoCheck" Content="Sembunyikan Info" VerticalAlignment="Center" Margin="12,0,0,0"
+                                  Checked="Filter_Changed" Unchecked="Filter_Changed" />
+                        <TextBox x:Name="SearchBox" Width="220" Margin="12,0,0,0" VerticalContentAlignment="Center"
+                                 TextChanged="Filter_Changed" ToolTip="Cari nomor sheet / pesan" />
+                    </StackPanel>
+                    <DataGrid x:Name="IssuesGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" MouseDoubleClick="GoTo_Click">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="70" />
+                            <DataGridTextColumn Header="Rule" Binding="{Binding RuleId}" Width="110" />
+                            <DataGridTextColumn Header="Sheet" Binding="{Binding SheetNumber}" Width="210" />
+                            <DataGridTextColumn Header="Temuan" Binding="{Binding Message}" Width="2*">
+                                <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style></DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Advice" Binding="{Binding Advice}" Width="2*">
+                                <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style></DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Auto Fix" Binding="{Binding FixValue}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="Register Excel">
+                <DockPanel Margin="6">
+                    <TextBlock x:Name="RegisterInfo" DockPanel.Dock="Top" Margin="0,0,0,6" TextWrapping="Wrap"
+                               Text="Import drawing list Excel (format SheetLink/GUID atau manual: DRAWING NUMBER + NAMA DRAWING)." />
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                        <Button Content="Terapkan ke Revit" Click="ApplyRegister_Click" FontWeight="SemiBold" />
+                        <Button Content="Pilih Semua" Click="SelectAllChanges_Click" />
+                        <Button Content="Kosongkan" Click="ClearChanges_Click" />
+                        <TextBlock Text="Ganti stage ke:" VerticalAlignment="Center" Margin="16,0,6,0" />
+                        <ComboBox x:Name="StageCombo" Width="200" DisplayMemberPath="Label" />
+                        <Button Content="Preview" Click="PreviewStage_Click" Margin="6,0,6,0" />
+                        <Button Content="Export Register dari Model…" Click="ExportRegister_Click" />
+                    </StackPanel>
+                    <DataGrid x:Name="DiffGrid" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal" MouseDoubleClick="DiffGoTo_Click">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="✔" Binding="{Binding Selected, UpdateSourceTrigger=PropertyChanged}" Width="34" />
+                            <DataGridTextColumn Header="Jenis" Binding="{Binding Kind}" Width="120" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Nomor" Binding="{Binding Number}" Width="200" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Nomor Baru" Binding="{Binding NewNumber}" Width="200" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Judul" Binding="{Binding Name}" Width="*" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Judul Baru" Binding="{Binding NewName}" Width="*" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Keterangan" Binding="{Binding Message}" Width="1.5*" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style></DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="Advice">
+                <DockPanel Margin="6">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
+                        <Button Content="Advice Aturan" Click="RuleAdvice_Click" />
+                        <Button x:Name="AiButton" Content="Advice AI" Click="AiAdvice_Click" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AiInfo" VerticalAlignment="Center" Foreground="Gray" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+                        <Button DockPanel.Dock="Right" x:Name="SendButton" Content="Kirim" Click="Send_Click" Margin="6,0,0,0" />
+                        <TextBox x:Name="ChatInput" VerticalContentAlignment="Center" Height="28" KeyDown="ChatInput_KeyDown"
+                                 ToolTip="Tanya AI tentang hasil QA, contoh: sheet mana yang harus diperbaiki dulu?" />
+                    </DockPanel>
+                    <TextBox x:Name="AdviceBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                             FontFamily="Consolas" FontSize="12" AcceptsReturn="True" />
+                </DockPanel>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

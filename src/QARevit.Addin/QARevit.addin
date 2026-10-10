@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>QA Revit</Name>
+    <Assembly>QARevit\QARevit.dll</Assembly>
+    <AddInId>6F1B7C2A-4E1D-4C8B-9B6E-2A7D5E3C9F10</AddInId>
+    <FullClassName>QARevit.Addin.App</FullClassName>
+    <VendorId>QARV</VendorId>
+    <VendorDescription>QA Revit - Drawing QA Agent</VendorDescription>
+  </AddIn>
+</RevitAddIns>

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Tanpa dependensi Revit agar bisa dites di CI. Tanpa library Excel pihak ketiga
+       untuk menghindari konflik DLL (DocumentFormat.OpenXml) di dalam proses Revit. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>QARevit.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Config\default-config.json" LogicalName="QARevit.Core.default-config.json" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,123 @@
+using QARevit.Core.Config;
+using QARevit.Core.Model;
+
+namespace QARevit.Core.Register;
+
+public enum ChangeKind { CreateSheet, RenameSheet, RenumberSheet, MissingInRegister, StageMismatch }
+
+/// <summary>Satu baris perbedaan register vs model; yang Applicable bisa diterapkan ke Revit.</summary>
+public sealed class SheetChange
+{
+    public ChangeKind Kind { get; init; }
+    public string? UniqueId { get; init; }
+    public string Number { get; init; } = "";
+    public string? NewNumber { get; init; }
+    public string Name { get; init; } = "";
+    public string? NewName { get; init; }
+    public string Message { get; init; } = "";
+    public bool Selected { get; set; }
+
+    public bool Applicable => Kind is ChangeKind.CreateSheet or ChangeKind.RenameSheet or ChangeKind.RenumberSheet;
+}
+
+public static class RegisterComparer
+{
+    /// <summary>Cocokkan per UniqueId dulu (deteksi nomor berubah), lalu per nomor sheet.</summary>
+    public static List<SheetChange> Compare(IReadOnlyList<RegisterEntry> register, IReadOnlyList<SheetInfo> sheets, QaConfig cfg)
+    {
+        var changes = new List<SheetChange>();
+        var byId = sheets.Where(s => s.UniqueId.Length > 0).ToDictionary(s => s.UniqueId, StringComparer.OrdinalIgnoreCase);
+        var byNumber = sheets.GroupBy(s => Key(s.Number)).ToDictionary(g => g.Key, g => g.First());
+        var matched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var e in register)
+        {
+            SheetInfo? sheet = null;
+            if (e.UniqueId is not null) byId.TryGetValue(e.UniqueId, out sheet);
+            sheet ??= byNumber.GetValueOrDefault(Key(e.Number));
+
+            if (sheet is null || matched.Contains(sheet.UniqueId))
+            {
+                changes.Add(new SheetChange
+                {
+                    Kind = ChangeKind.CreateSheet, Number = e.Number, Name = e.Name, NewNumber = e.Number, NewName = e.Name,
+                    Message = $"Ada di register (baris {e.SourceRow}) tetapi belum ada di model.", Selected = true,
+                });
+                continue;
+            }
+            matched.Add(sheet.UniqueId);
+
+            if (Key(sheet.Number) != Key(e.Number))
+            {
+                var stageMsg = StageNote(sheet.Number, e.Number, cfg);
+                changes.Add(new SheetChange
+                {
+                    Kind = ChangeKind.RenumberSheet, UniqueId = sheet.UniqueId, Number = sheet.Number, NewNumber = e.Number.Trim(),
+                    Name = sheet.Name, Message = "Nomor di register berbeda dengan model." + stageMsg, Selected = true,
+                });
+            }
+            if (Normalize(sheet.Name) != Normalize(e.Name) && e.Name.Trim().Length > 0)
+                changes.Add(new SheetChange
+                {
+                    Kind = ChangeKind.RenameSheet, UniqueId = sheet.UniqueId, Number = sheet.Number, Name = sheet.Name,
+                    NewName = e.Name.Trim(), Message = "Judul di register berbeda dengan model.", Selected = true,
+                });
+        }
+
+        foreach (var s in sheets.Where(s => !matched.Contains(s.UniqueId)))
+            changes.Add(new SheetChange
+            {
+                Kind = ChangeKind.MissingInRegister, UniqueId = s.UniqueId, Number = s.Number, Name = s.Name,
+                Message = "Ada di model tetapi tidak ada di register.",
+            });
+
+        // Stage register vs model secara keseluruhan.
+        var regStage = Majority(register.Select(r => SheetCode.TryParse(r.Number)?.Stage));
+        var modelStage = Majority(sheets.Select(s => SheetCode.TryParse(s.Number)?.Stage));
+        if (regStage is not null && modelStage is not null && regStage != modelStage)
+        {
+            var behind = cfg.StageIndex(regStage) < cfg.StageIndex(modelStage);
+            changes.Insert(0, new SheetChange
+            {
+                Kind = ChangeKind.StageMismatch, Number = "(semua)", Name = "",
+                Message = behind
+                    ? $"Register masih {regStage} ({cfg.StageName(regStage)}) sedangkan model sudah {modelStage} ({cfg.StageName(modelStage)}). Register perlu di-update."
+                    : $"Register sudah {regStage} ({cfg.StageName(regStage)}) sedangkan model masih {modelStage} ({cfg.StageName(modelStage)}). Gunakan 'Ganti Stage' di model.",
+            });
+        }
+        return changes;
+    }
+
+    /// <summary>Buat daftar renumber untuk mengganti stage seluruh sheet (mis. BD → DD).</summary>
+    public static List<SheetChange> PlanStageChange(IReadOnlyList<SheetInfo> sheets, string newStage)
+    {
+        var list = new List<SheetChange>();
+        foreach (var s in sheets)
+        {
+            var code = SheetCode.TryParse(s.Number);
+            if (code is null || code.Stage == newStage) continue;
+            list.Add(new SheetChange
+            {
+                Kind = ChangeKind.RenumberSheet, UniqueId = s.UniqueId, Number = s.Number, Name = s.Name,
+                NewNumber = code.WithStage(newStage).Format(), Message = $"Ganti stage {code.Stage} → {newStage}.", Selected = true,
+            });
+        }
+        return list;
+    }
+
+    private static string StageNote(string modelNumber, string registerNumber, QaConfig cfg)
+    {
+        var a = SheetCode.TryParse(modelNumber);
+        var b = SheetCode.TryParse(registerNumber);
+        if (a is null || b is null || a.Stage == b.Stage) return "";
+        return cfg.StageIndex(b.Stage) < cfg.StageIndex(a.Stage)
+            ? $" Perhatian: register stage {b.Stage} lebih awal dari model {a.Stage} (stage mundur)."
+            : $" Stage naik {a.Stage} → {b.Stage}.";
+    }
+
+    private static string? Majority(IEnumerable<string?> values) =>
+        values.Where(v => v is not null).GroupBy(v => v).OrderByDescending(g => g.Count()).FirstOrDefault()?.Key;
+
+    private static string Key(string number) => number.Trim().ToUpperInvariant();
+    private static string Normalize(string name) => Rules.TitleText.NormalizeWhitespace(name).ToUpperInvariant();
+}

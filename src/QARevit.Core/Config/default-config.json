@@ -1,0 +1,46 @@
+{
+  "docType": "DWG",
+  "discipline": "ME",
+  "projectCodes": [ "KRF", "PGR", "ARW" ],
+  "stages": [
+    { "code": "CD", "name": "Concept Design" },
+    { "code": "BD", "name": "Basic Design" },
+    { "code": "DD", "name": "Detail Design" },
+    { "code": "DC", "name": "Detail Construction" }
+  ],
+  "systems": {
+    "EL": { "name": "Drawing List / Cover", "keywords": [ "DRAWING LIST", "COVER" ] },
+    "EP": { "name": "Power / Cable Route", "keywords": [ "CABLE", "POWER", "PANEL", "DUCT BANK", "TRAY", "3D-VIEW" ] },
+    "LP": { "name": "Lighting", "keywords": [ "LIGHTING" ] },
+    "SO": { "name": "Receptacle", "keywords": [ "RECEPTACLE", "SOCKET", "STOP KONTAK" ] },
+    "EG": { "name": "Grounding", "keywords": [ "GROUNDING", "EARTHING" ] },
+    "AL": { "name": "Lightning Protection", "keywords": [ "LIGHTNING PROTECTION", "PENANGKAL PETIR" ] },
+    "FA": { "name": "Fire Alarm", "keywords": [ "FIRE ALARM" ] },
+    "PA": { "name": "Public Address", "keywords": [ "PUBLIC ADDRESS", "SOUND SYSTEM" ] },
+    "TV": { "name": "CCTV", "keywords": [ "CCTV" ] },
+    "TN": { "name": "Data & Telephone", "keywords": [ "DATA", "TELEPHONE", "NETWORK" ] },
+    "TY": { "name": "Access Card", "keywords": [ "ACCESS CARD", "ACCESS CONTROL" ] },
+    "LV": { "name": "SLD / Panel Schedule", "keywords": [ "SINGLE LINE", "PANEL SCHEDULE", "SLD", "RISER" ] }
+  },
+  "drawingTypes": {
+    "0": { "name": "General / Cover", "keywords": [], "mustContainKeyword": false },
+    "1": { "name": "Layout / Plan", "keywords": [], "mustContainKeyword": false },
+    "3": { "name": "Section", "keywords": [ "SECTION" ], "mustContainKeyword": true },
+    "4": { "name": "Enlarged", "keywords": [ "ENLARGED" ], "mustContainKeyword": true },
+    "6": { "name": "Schematic / SLD", "keywords": [ "SCHEMATIC", "SINGLE LINE", "DIAGRAM", "PANEL SCHEDULE" ], "mustContainKeyword": true }
+  },
+  "zoneCompleteness": {
+    "enabled": true,
+    "whenAnyOf": [ "LP", "SO", "EG" ],
+    "expect": [ "LP", "SO", "EG" ]
+  },
+  "typos": {
+    "PLATFROM": "PLATFORM",
+    "LIGTHING": "LIGHTING",
+    "GROUDING": "GROUNDING",
+    "RECEPTACEL": "RECEPTACLE",
+    "ELECTRICAL & ELECTRONICAL": "ELECTRICAL & ELECTRONIC"
+  },
+  "constructionStage": "DC",
+  "constructionRequiredParameters": [ "Checked By", "Approved By" ]
+}

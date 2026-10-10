@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>QARevit.Addin</RootNamespace>
+    <AssemblyName>QARevit</AssemblyName>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2025.*" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2025.*" ExcludeAssets="runtime" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\QARevit.Core\QARevit.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="QARevit.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
