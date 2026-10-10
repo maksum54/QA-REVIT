@@ -139,6 +139,8 @@
                                         <Button Style="{StaticResource DarkButton}" Content="Go To Sheet" Click="GoTo_Click" />
                                         <Button Content="Fix Terpilih" Click="FixSelected_Click" />
                                         <Button Content="Fix Semua Judul" Click="FixAll_Click" />
+                                        <Button Content="Fix Semua Revisi" Click="FixRevisions_Click"
+                                                ToolTip="Samakan centang drawing list, SUB_REV / APVD di kop, dan revision cloud dengan revisi yang menempel di sheet." />
                                     </StackPanel>
                                 </DockPanel>
                             </Border>

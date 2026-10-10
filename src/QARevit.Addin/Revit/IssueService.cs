@@ -243,6 +243,67 @@ public static class IssueService
         return result;
     }
 
+    /// <summary>
+    /// Perbaikan otomatis temuan REV-*: semuanya dihitung ulang dari revisi yang menempel di sheet saat ini,
+    /// bukan dari teks temuan, jadi aman walau model berubah sejak QA terakhir.
+    /// </summary>
+    public static ApplyResult ApplyRevisionFixes(Document doc, IReadOnlyList<Core.Model.QaIssue> issues, string approver)
+    {
+        var result = new ApplyResult();
+        var (_, columns) = FindColumns(doc,
+            Revision.GetAllRevisionIds(doc).Select(doc.GetElement).OfType<Revision>().Select(r => r.RevisionDate ?? "").ToHashSet());
+        var viewToSheet = new FilteredElementCollector(doc).OfClass(typeof(Viewport)).Cast<Viewport>()
+            .GroupBy(v => v.ViewId).ToDictionary(g => g.Key, g => g.First().SheetId);
+        var allClouds = new FilteredElementCollector(doc).OfClass(typeof(RevisionCloud)).Cast<RevisionCloud>().ToList();
+
+        using var tx = new Transaction(doc, "QA Revit - Fix Revisi");
+        tx.Start();
+        foreach (var issue in issues)
+        {
+            if (issue.UniqueId is null || doc.GetElement(issue.UniqueId) is not ViewSheet sheet) { result.Errors.Add($"{issue.SheetNumber}: sheet tidak ditemukan."); continue; }
+            try
+            {
+                var onSheet = RevisionsOn(doc, sheet);
+                switch (issue.Fix)
+                {
+                    case Core.Model.FixKind.SyncSheetList:
+                        var dates = onSheet.Select(r => r.RevisionDate ?? "").ToHashSet();
+                        foreach (var c in columns)
+                            sheet.LookupParameter(c.ParamName)?.Set(!c.IsFree && dates.Contains(c.Heading) ? 1 : 0);
+                        var noColumn = dates.Where(d => columns.All(c => c.Heading != d)).ToList();
+                        if (noColumn.Count > 0) result.Errors.Add($"{sheet.SheetNumber}: sheet list belum punya kolom untuk tanggal {string.Join(", ", noColumn)}.");
+                        break;
+
+                    case Core.Model.FixKind.SyncTitleBlock:
+                        SetText(sheet, "SUB_REV", onSheet.Count == 0 ? "" : sheet.GetRevisionNumberOnSheet(onSheet[^1].Id) ?? "");
+                        for (var row = 1; row <= ApproverRows; row++)
+                        {
+                            if (row > onSheet.Count) SetText(sheet, $"{row} APV", "");
+                            else if (approver.Length > 0 && string.IsNullOrEmpty(sheet.LookupParameter($"{row} APV")?.AsString()))
+                                SetText(sheet, $"{row} APV", approver);
+                        }
+                        break;
+
+                    case Core.Model.FixKind.MoveClouds:
+                        if (onSheet.Count < 2) continue;
+                        var current = onSheet[^1];
+                        var mine = allClouds.Where(c => c.OwnerViewId == sheet.Id || viewToSheet.GetValueOrDefault(c.OwnerViewId) == sheet.Id).ToList();
+                        if (mine.Any(c => c.RevisionId == current.Id)) continue; // revisi terakhir sudah punya cloud
+                        // Revisi lama bisa menempel hanya lewat cloud-nya: tempel dulu secara eksplisit supaya tidak hilang dari sheet.
+                        sheet.SetAdditionalRevisionIds(sheet.GetAllRevisionIds());
+                        foreach (var cloud in mine) cloud.RevisionId = current.Id;
+                        break;
+
+                    default: continue;
+                }
+                result.Applied++;
+            }
+            catch (Exception ex) { result.Errors.Add($"{sheet.SheetNumber}: {ex.Message}"); }
+        }
+        tx.Commit();
+        return result;
+    }
+
     public static ApplyResult SetNote(Document doc, string sheetUniqueId, string note)
     {
         var result = new ApplyResult();

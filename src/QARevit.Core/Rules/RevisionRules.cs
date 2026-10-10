@@ -24,6 +24,8 @@ public sealed class SheetListSyncRule : IQaRule
                 RuleId = Id, Severity = Severity.Warning, SheetNumber = s.Number, UniqueId = s.UniqueId,
                 Message = $"Drawing list tidak sinkron: kolom tercentang [{Join(ticked)}], revisi di sheet [{Join(dates)}].",
                 Advice = "Tab Issue / Revisi: klik sel STATUS sheet ini, lalu pilih mana yang benar (revisi atau centang).",
+                Fix = FixKind.SyncSheetList,
+                FixValue = dates.Count == 0 ? "Lepas semua centang kolom" : "Centang kolom: " + Join(dates),
             };
         }
     }
@@ -61,6 +63,8 @@ public sealed class RevisionCloudRule : IQaRule
                     Message = $"Cloud tidak sinkron: sheet sudah revisi {current.Number} ({current.Date}) tetapi revision cloud masih milik revisi " +
                               $"{string.Join(", ", stale.Select(r => r.Number))}.",
                     Advice = $"Pilih cloud di sheet/view, ganti parameter Revision ke Seq {current.Sequence}, atau gambar cloud baru untuk perubahan revisi {current.Number}.",
+                    Fix = FixKind.MoveClouds,
+                    FixValue = $"Pindahkan cloud ke revisi {current.Number}",
                 }
                 : new QaIssue
                 {
@@ -120,6 +124,9 @@ public sealed class TitleBlockRevisionRule : IQaRule
         RuleId = Id, Severity = Severity.Warning, SheetNumber = s.Number, UniqueId = s.UniqueId,
         Message = "Kop tidak sinkron dengan revisi: " + string.Join("; ", problems) + ".",
         Advice = "Tab Issue / Revisi: centang sheet, pilih revisi terakhirnya, isi Note dan APVD, lalu Terapkan Issue.",
+        // SUB_REV dan APVD bisa diturunkan dari revisi di sheet; isi REV_NOTE harus diketik orang.
+        Fix = problems.Any(p => p.StartsWith("SUB_REV") || p.StartsWith("APVD")) ? FixKind.SyncTitleBlock : FixKind.None,
+        FixValue = "SUB_REV dan APVD mengikuti revisi di sheet",
     };
 }
 

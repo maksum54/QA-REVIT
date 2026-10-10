@@ -2,7 +2,16 @@ namespace QARevit.Core.Model;
 
 public enum Severity { Info, Warning, Error }
 
-public enum FixKind { None, RenameSheet, RenumberSheet, CreateSheet }
+public enum FixKind
+{
+    None, RenameSheet, RenumberSheet, CreateSheet,
+    /// <summary>Centang kolom sheet list mengikuti revisi di sheet.</summary>
+    SyncSheetList,
+    /// <summary>SUB_REV dan APVD di kop mengikuti revisi di sheet.</summary>
+    SyncTitleBlock,
+    /// <summary>Pindahkan revision cloud dari revisi lama ke revisi terakhir sheet.</summary>
+    MoveClouds,
+}
 
 /// <summary>Satu temuan QA, lengkap dengan saran (advice) dan perbaikan otomatis bila aman.</summary>
 public sealed class QaIssue

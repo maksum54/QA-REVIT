@@ -616,11 +616,35 @@ public partial class DashboardWindow : Window
         if (fixable.Count == 0) { Status("Temuan terpilih tidak punya perbaikan otomatis."); return; }
         try
         {
-            var result = await _runner.Run(app => SheetEditor.ApplyFixes(app.ActiveUIDocument.Document, fixable));
+            var approver = IssueApvBox.Text.Trim();
+            var result = await _runner.Run(app =>
+            {
+                var doc = app.ActiveUIDocument.Document;
+                var r = SheetEditor.ApplyFixes(doc, fixable);
+                var revisionFixes = IssueService.ApplyRevisionFixes(doc, fixable, approver);
+                r.Applied += revisionFixes.Applied;
+                r.Errors.AddRange(revisionFixes.Errors);
+                return r;
+            });
             ShowApplyResult(result);
             await RunQaAsync();
         }
         catch (Exception ex) { Error("Fix gagal", ex); }
+    }
+
+    private async void FixRevisions_Click(object sender, RoutedEventArgs e)
+    {
+        if (_report is null) return;
+        var fixes = _report.Issues.Where(i => i.CanFix && i.Fix is FixKind.SyncSheetList or FixKind.SyncTitleBlock or FixKind.MoveClouds).ToList();
+        if (fixes.Count == 0) { Status("Tidak ada temuan revisi yang bisa diperbaiki otomatis."); return; }
+        string Line(FixKind kind, string label) => fixes.Count(i => i.Fix == kind) is > 0 and var n ? $"\n• {n} sheet: {label}" : "";
+        if (MessageBox.Show(this, $"Perbaiki {fixes.Count} temuan revisi?\n" +
+                Line(FixKind.SyncSheetList, "centang drawing list disamakan dengan revisi di sheet") +
+                Line(FixKind.SyncTitleBlock, "SUB_REV dan APVD di kop disamakan dengan revisi di sheet") +
+                Line(FixKind.MoveClouds, "revision cloud dipindah ke revisi terakhir") +
+                "\n\nYang dianggap benar adalah revisi yang menempel di sheet. REV_NOTE yang kosong tetap harus diketik.",
+                "QA Revit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        await FixAsync(fixes);
     }
 
     // ---------- Register ----------

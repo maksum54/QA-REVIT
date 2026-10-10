@@ -24,7 +24,7 @@ public static class SheetEditor
     /// <summary>Terapkan perbaikan otomatis dari temuan QA.</summary>
     public static ApplyResult ApplyFixes(Document doc, IEnumerable<QaIssue> issues)
     {
-        var changes = issues.Where(i => i.CanFix && i.UniqueId is not null).Select(i => new SheetChange
+        var changes = issues.Where(i => i.CanFix && i.UniqueId is not null && i.Fix is FixKind.RenameSheet or FixKind.RenumberSheet).Select(i => new SheetChange
         {
             Kind = i.Fix == FixKind.RenameSheet ? ChangeKind.RenameSheet : ChangeKind.RenumberSheet,
             UniqueId = i.UniqueId,
