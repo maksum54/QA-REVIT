@@ -219,7 +219,7 @@
                             <Border DockPanel.Dock="Top" Padding="14,12" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
                                 <StackPanel>
                                     <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,0,0,10"
-                                               Text="Centang sheet (satu per satu atau Pilih Semua), pilih family kop, lalu Ganti Kop. Kop lama diganti type-nya sehingga posisi dan isi parameter tetap; sheet tanpa kop diberi kop baru." />
+                                               Text="Centang sheet, pilih family kop, lalu Ganti Kop. Centang banyak sekaligus: sorot baris dengan Shift/Ctrl+klik, lalu klik satu kotak centang atau tekan Spasi. Kop lama diganti type-nya sehingga posisi dan isi parameter tetap; sheet tanpa kop diberi kop baru." />
                                     <DockPanel>
                                         <Grid DockPanel.Dock="Right" Width="220">
                                             <TextBox x:Name="KopSearchBox" TextChanged="KopFilter_Changed" />

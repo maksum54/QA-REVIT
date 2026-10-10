@@ -47,6 +47,59 @@ public partial class DashboardWindow : Window
         _settings = AddinSettings.Load();
         _config = LoadConfigSafe();
         RefreshSettingsUi();
+        foreach (var grid in new[] { KopGrid, IssueGrid, DiffGrid })
+        {
+            grid.PreviewMouseLeftButtonDown += CheckGrid_MouseDown;
+            grid.PreviewKeyDown += CheckGrid_KeyDown;
+        }
+    }
+
+    // ---------- Centang banyak baris ----------
+    // Sorot beberapa baris (Shift/Ctrl+klik), lalu klik satu kotak centang atau tekan Spasi: semua yang disorot ikut.
+
+    private static bool IsChecked(object row) => row switch
+    {
+        KopRow k => k.Selected, IssueRow i => i.Selected, SheetChange c => c.Selected, _ => false,
+    };
+
+    private static void SetChecked(object row, bool value)
+    {
+        switch (row)
+        {
+            case KopRow k: k.Selected = value; break;
+            case IssueRow i: i.Selected = value; break;
+            case SheetChange c when c.Applicable: c.Selected = value; break;
+        }
+    }
+
+    private void ToggleChecked(System.Windows.Controls.DataGrid grid, object clicked)
+    {
+        var value = !IsChecked(clicked);
+        var rows = grid.SelectedItems.Count > 1 && grid.SelectedItems.Contains(clicked)
+            ? grid.SelectedItems.Cast<object>().ToList() : new List<object> { clicked };
+        foreach (var row in rows) SetChecked(row, value);
+        grid.Items.Refresh();
+        UpdateKopCount();
+        UpdateIssueCount();
+    }
+
+    private void CheckGrid_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        var grid = (System.Windows.Controls.DataGrid)sender;
+        var source = e.OriginalSource as DependencyObject;
+        while (source is not null and not System.Windows.Controls.DataGridCell)
+            source = source is System.Windows.Media.Visual ? System.Windows.Media.VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+        if (source is not System.Windows.Controls.DataGridCell { Column.DisplayIndex: 0 } cell) return;
+        ToggleChecked(grid, cell.DataContext);
+        e.Handled = true; // sorotan baris tidak berubah, dan satu klik langsung mencentang
+    }
+
+    private void CheckGrid_KeyDown(object sender, KeyEventArgs e)
+    {
+        var grid = (System.Windows.Controls.DataGrid)sender;
+        if (e.Key != Key.Space || e.OriginalSource is System.Windows.Controls.TextBox || grid.SelectedItem is not { } first) return;
+        ToggleChecked(grid, first);
+        e.Handled = true;
     }
 
     private QaConfig LoadConfigSafe()
@@ -213,7 +266,7 @@ public partial class DashboardWindow : Window
         if (IssueApvBox.Text.Length == 0) IssueApvBox.Text = data.Approver;
         IssueInfo.Text =
             "Banyak sheet: centang sheet, isi 1–4, klik Terapkan Issue.  Satu sheet: klik sel REVISI DI SHEET, KOLOM TERCENTANG atau STATUS." +
-            "  Ketik langsung: klik dua kali NOMOR, JUDUL atau NOTE, lalu Enter.  " +
+            "  Ketik langsung: klik dua kali NOMOR, JUDUL atau NOTE, lalu Enter.  Centang banyak: sorot baris dengan Shift/Ctrl+klik, lalu klik satu kotak centang atau tekan Spasi.  " +
             (data.Columns.Count == 0
                 ? "Sheet list dengan kolom 'ACT ISSUE NN' tidak ditemukan, jadi kolom sheet list tidak diisi."
                 : $"Kolom issue dibaca dari schedule '{data.ScheduleName}'.");
