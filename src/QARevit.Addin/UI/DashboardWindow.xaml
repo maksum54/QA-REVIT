@@ -290,6 +290,10 @@
                                             <Button Content="Kosongkan" Click="IssueClear_Click" />
                                             <Button Style="{StaticResource DarkButton}" Content="Buka Sheet" Click="IssueGoTo_Click" />
                                             <Button Style="{StaticResource DangerButton}" Content="🗑 Hapus Sheet" Click="DeleteSheets_Click" />
+                                            <TextBlock Text="Stage" VerticalAlignment="Center" Margin="8,0,8,0" Foreground="{StaticResource Muted}" />
+                                            <ComboBox x:Name="IssueStageCombo" Width="170" DisplayMemberPath="Label" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                                            <Button Content="Ganti Stage" Click="IssueStage_Click"
+                                                    ToolTip="Ganti kode stage di nomor sheet tercentang, mis. ARW-DWG-BD-… menjadi ARW-DWG-DD-…" />
                                             <TextBlock x:Name="IssueCount" VerticalAlignment="Center" Foreground="{StaticResource Muted}" Margin="4,0,12,0" />
                                         </StackPanel>
                                     </DockPanel>

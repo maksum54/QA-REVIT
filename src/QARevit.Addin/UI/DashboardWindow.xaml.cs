@@ -116,6 +116,8 @@ public partial class DashboardWindow : Window
     {
         StageCombo.ItemsSource = _config.Stages.Select(s => new StageItem(s.Code, $"{s.Code} — {s.Name}")).ToList();
         if (StageCombo.SelectedIndex < 0 && StageCombo.Items.Count > 0) StageCombo.SelectedIndex = 0;
+        IssueStageCombo.ItemsSource = StageCombo.ItemsSource;
+        if (IssueStageCombo.SelectedIndex < 0 && IssueStageCombo.Items.Count > 0) IssueStageCombo.SelectedIndex = 0;
         AiInfo.Text = _settings.Ai.IsConfigured
             ? $"AI: {_settings.Ai.Provider} / {_settings.Ai.Model}"
             : "AI belum diatur (Settings). Advice aturan tetap bisa dipakai.";
@@ -401,6 +403,28 @@ public partial class DashboardWindow : Window
             await RunQaAsync();
         }
         catch (Exception ex) { Error("Hapus sheet gagal", ex); }
+    }
+
+    private async void IssueStage_Click(object sender, RoutedEventArgs e)
+    {
+        var targets = IssueTargets().Select(t => t.UniqueId).ToHashSet();
+        if (_report is null || targets.Count == 0) { Status("Centang sheet yang akan diganti stage-nya."); return; }
+        if (IssueStageCombo.SelectedItem is not StageItem stage) { Status("Pilih stage dulu."); return; }
+
+        var changes = RegisterComparer.PlanStageChange(_report.Sheets.Where(s => targets.Contains(s.UniqueId)).ToList(), stage.Code);
+        if (changes.Count == 0) { Status($"Tidak ada yang diubah: sheet terpilih sudah stage {stage.Code} atau nomornya tidak mengikuti pola."); return; }
+        var skipped = targets.Count - changes.Count;
+        var sample = string.Join("\n", changes.Take(5).Select(c => $"{c.Number}  →  {c.NewNumber}")) + (changes.Count > 5 ? "\n…" : "");
+        if (MessageBox.Show(this, $"Ganti stage {changes.Count} sheet ke {stage.Label}?\n\n{sample}" +
+                (skipped > 0 ? $"\n\n{skipped} sheet dilewati (sudah stage itu, atau nomornya tidak mengikuti pola)." : ""),
+                "QA Revit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        try
+        {
+            var result = await _runner.Run(app => SheetEditor.Apply(app.ActiveUIDocument.Document, changes, "QA Revit - Ganti Stage"));
+            ShowApplyResult(result);
+            await RunQaAsync();
+        }
+        catch (Exception ex) { Error("Ganti stage gagal", ex); }
     }
 
     // Ketik langsung di tabel: nomor, judul, note.
