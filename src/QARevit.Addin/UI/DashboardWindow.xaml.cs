@@ -141,7 +141,17 @@ public partial class DashboardWindow : Window
             UpdateTitleBlocks(titleBlocks, sheets);
             UpdateIssues(issues);
             _report = new RuleEngine().Run(sheets, _config);
-            if (_register is not null) _changes = RegisterComparer.Compare(_register, sheets, _config);
+            if (_register is not null)
+            {
+                _changes = RegisterComparer.Compare(_register, sheets, _config);
+                // Excel hasil export juga membawa revisi dan NOTE per sheet: tampilkan bedanya sebagai baris sendiri.
+                var names = sheets.ToDictionary(s => s.UniqueId, s => s.Name);
+                _changes.AddRange(RegisterComparer.PlanExtras(_register, RevStates()).Select(x => new SheetChange
+                {
+                    Kind = ChangeKind.UpdateRevision, UniqueId = x.UniqueId, Number = x.Number, Name = names.GetValueOrDefault(x.UniqueId, ""),
+                    Message = "Excel berbeda: " + x.Message + ".", Selected = true, Extra = x,
+                }));
+            }
 
             TotalText.Text = _report.Total.ToString();
             PassedText.Text = _report.Passed.ToString();
@@ -625,6 +635,12 @@ public partial class DashboardWindow : Window
                                 (read.Warnings.Count > 0 ? "  ⚠ " + string.Join(" ", read.Warnings) : "");
             Tabs.SelectedIndex = 1;
             await RunQaAsync();
+            if (read.Entries.Any(x => x.RevisionSeqs is not null || x.Note is not null))
+            {
+                var extras = _changes.Count(c => c.Extra is not null);
+                RegisterInfo.Text += $"  Excel ini hasil export (ada kolom revisi dan NOTE): {extras} sheet berbeda revisi/NOTE dengan model" +
+                                     (extras > 0 ? ", lihat baris UpdateRevision. 'Terapkan ke Revit' ikut menyamakannya." : ".");
+            }
         }
         catch (Exception ex) { Error("Import Excel gagal", ex); }
     }
@@ -657,10 +673,7 @@ public partial class DashboardWindow : Window
                 MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         try
         {
-            var defaultKop = (NewSheetKopCombo.SelectedItem as TitleBlockOption)?.Id;
-            var result = await _runner.Run(app => SheetEditor.Apply(app.ActiveUIDocument.Document, selected, defaultTitleBlockTypeId: defaultKop));
-            ShowApplyResult(result);
-            await RunQaAsync();
+            ShowApplyResult(await ApplyPlanAsync(onlySelected: true));
         }
         catch (Exception ex) { Error("Gagal menerapkan perubahan", ex); }
     }
@@ -691,9 +704,11 @@ public partial class DashboardWindow : Window
     }
 
     /// <summary>Semua beda Excel terlampir vs model: sheet (buat / nomor / judul) dan revisi + note.</summary>
-    private (List<SheetChange> Sheets, List<ExtraChange> Extras) ExcelPlan() =>
-        (_changes.Where(c => c.Applicable).ToList(),
-            _register is null ? new List<ExtraChange>() : RegisterComparer.PlanExtras(_register, RevStates()));
+    private (List<SheetChange> Sheets, List<ExtraChange> Extras) ExcelPlan(bool onlySelected = false)
+    {
+        var rows = _changes.Where(c => c.Applicable && (!onlySelected || c.Selected)).ToList();
+        return (rows.Where(c => c.Extra is null).ToList(), rows.Where(c => c.Extra is not null).Select(c => c.Extra!).ToList());
+    }
 
     private async void AttachExcel_Click(object sender, RoutedEventArgs e)
     {
@@ -779,21 +794,47 @@ public partial class DashboardWindow : Window
         var (sheets, firstExtras) = ExcelPlan();
         if (MessageBox.Show(this, $"Terapkan {sheets.Count + firstExtras.Count} perubahan dari Excel ke model?", "QA Revit",
                 MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return false;
-        var applied = 0;
-        var errors = new List<string>();
         try
+        {
+            var result = await ApplyPlanAsync(onlySelected: false);
+            var (applied, errors) = (result.Applied, result.Errors);
+
+            var (leftSheets, leftExtras) = ExcelPlan();
+            var left = leftSheets.Count + leftExtras.Count;
+            var text = $"**{applied} perubahan diterapkan ke model.** " +
+                       (left == 0 ? "Model sekarang sama dengan Excel." : $"Masih ada {left} beda yang belum bisa disamakan.");
+            if (errors.Count > 0)
+                text += "\n\n### Tidak berhasil\n" + string.Join("\n", errors.Take(10).Select(x => $"- {x}")) +
+                        (errors.Count > 10 ? $"\n- … dan {errors.Count - 10} lainnya" : "");
+            AddBubble(text + "\n\n*Bisa dibatalkan dengan Undo di Revit.*", fromUser: false);
+        }
+        catch (Exception ex) { Error("Terapkan Excel gagal", ex); }
+        return true;
+    }
+
+    /// <summary>
+    /// Samakan model dengan Excel: sheet dulu (buat, nomor, judul), lalu revisi dan NOTE.
+    /// Dipakai tombol di chat (semua) dan "Terapkan ke Revit" di tab Register (yang dicentang saja).
+    /// </summary>
+    private async Task<ApplyResult> ApplyPlanAsync(bool onlySelected)
+    {
+        var result = new ApplyResult();
+        var errors = result.Errors;
+        var sheets = ExcelPlan(onlySelected).Sheets;
+        // Refresh di tengah mencentang ulang semua baris, jadi catat dulu baris revisi yang tidak dicentang.
+        var skipped = _changes.Where(c => onlySelected && c.Extra is not null && !c.Selected).Select(c => c.UniqueId).ToHashSet();
         {
             if (sheets.Count > 0)
             {
                 var defaultKop = (NewSheetKopCombo.SelectedItem as TitleBlockOption)?.Id;
                 var r = await _runner.Run(app => SheetEditor.Apply(app.ActiveUIDocument.Document, sheets, defaultTitleBlockTypeId: defaultKop));
-                applied += r.Applied;
+                result.Applied += r.Applied;
                 errors.AddRange(r.Errors);
                 await RunQaAsync();
             }
 
             // Revisi dan note dihitung ulang setelah nomor baru / sheet baru masuk, supaya sheet itu ikut terisi.
-            var extras = ExcelPlan().Extras;
+            var extras = ExcelPlan().Extras.Where(x => !skipped.Contains(x.UniqueId)).ToList();
             if (extras.Count > 0 && _issues is { } data)
             {
                 var bySeq = data.Revisions.ToDictionary(r => r.Sequence);
@@ -811,22 +852,12 @@ public partial class DashboardWindow : Window
                 }).ToList();
                 var approver = IssueApvBox.Text.Trim();
                 var r = await _runner.Run(app => IssueService.SetStates(app.ActiveUIDocument.Document, states, data.Columns, approver));
-                applied += r.Applied;
+                result.Applied += r.Applied;
                 errors.AddRange(r.Errors);
                 await RunQaAsync();
             }
-
-            var (leftSheets, leftExtras) = ExcelPlan();
-            var left = leftSheets.Count + leftExtras.Count;
-            var text = $"**{applied} perubahan diterapkan ke model.** " +
-                       (left == 0 ? "Model sekarang sama dengan Excel." : $"Masih ada {left} beda yang belum bisa disamakan.");
-            if (errors.Count > 0)
-                text += "\n\n### Tidak berhasil\n" + string.Join("\n", errors.Take(10).Select(x => $"- {x}")) +
-                        (errors.Count > 10 ? $"\n- … dan {errors.Count - 10} lainnya" : "");
-            AddBubble(text + "\n\n*Bisa dibatalkan dengan Undo di Revit.*", fromUser: false);
         }
-        catch (Exception ex) { Error("Terapkan Excel gagal", ex); }
-        return true;
+        return result;
     }
 
     // ---------- Advice ----------

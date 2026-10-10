@@ -3,7 +3,7 @@ using QARevit.Core.Model;
 
 namespace QARevit.Core.Register;
 
-public enum ChangeKind { CreateSheet, RenameSheet, RenumberSheet, MissingInRegister, StageMismatch }
+public enum ChangeKind { CreateSheet, RenameSheet, RenumberSheet, MissingInRegister, StageMismatch, UpdateRevision }
 
 /// <summary>Satu baris perbedaan register vs model; yang Applicable bisa diterapkan ke Revit.</summary>
 public sealed class SheetChange
@@ -18,8 +18,10 @@ public sealed class SheetChange
     public string? TitleBlock { get; init; }
     public string Message { get; init; } = "";
     public bool Selected { get; set; }
+    /// <summary>Untuk <see cref="ChangeKind.UpdateRevision"/>: revisi dan NOTE yang diminta Excel.</summary>
+    public ExtraChange? Extra { get; init; }
 
-    public bool Applicable => Kind is ChangeKind.CreateSheet or ChangeKind.RenameSheet or ChangeKind.RenumberSheet;
+    public bool Applicable => Kind is ChangeKind.CreateSheet or ChangeKind.RenameSheet or ChangeKind.RenumberSheet or ChangeKind.UpdateRevision;
 }
 
 /// <summary>REV_NOTE dan revisi (nomor urut) yang sekarang ada di satu sheet.</summary>
