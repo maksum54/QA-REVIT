@@ -15,6 +15,20 @@ public partial class DashboardWindow : Window
 {
     private sealed record StageItem(string Code, string Label);
 
+    /// <summary>Baris di tab Kop.</summary>
+    public sealed class KopRow
+    {
+        public bool Selected { get; set; }
+        public string UniqueId { get; init; } = "";
+        public string Number { get; init; } = "";
+        public string Name { get; init; } = "";
+        public string TitleBlock { get; init; } = "";
+        public string TitleBlockDisplay => TitleBlock.Length == 0 ? "— tanpa kop —" : TitleBlock;
+    }
+
+    private List<KopRow> _kopRows = new();
+    private List<TitleBlockOption> _titleBlocks = new();
+
     private readonly RevitTaskRunner _runner;
     private AddinSettings _settings;
     private QaConfig _config;
@@ -62,7 +76,12 @@ public partial class DashboardWindow : Window
         try
         {
             Status("Membaca sheet dari model…");
-            var sheets = await _runner.Run(app => SheetCollector.Collect(app.ActiveUIDocument.Document));
+            var (sheets, titleBlocks) = await _runner.Run(app =>
+            {
+                var doc = app.ActiveUIDocument.Document;
+                return (SheetCollector.Collect(doc), TitleBlockService.GetTypes(doc));
+            });
+            UpdateTitleBlocks(titleBlocks, sheets);
             _report = new RuleEngine().Run(sheets, _config);
             if (_register is not null) _changes = RegisterComparer.Compare(_register, sheets, _config);
 
@@ -87,6 +106,91 @@ public partial class DashboardWindow : Window
             Status($"QA selesai {DateTime.Now:HH:mm:ss}: {_report.Issues.Count} temuan dari {_report.Total} sheet.");
         }
         catch (Exception ex) { Error("QA gagal", ex); }
+    }
+
+    private void UpdateTitleBlocks(List<TitleBlockOption> types, IReadOnlyList<SheetInfo> sheets)
+    {
+        var keepKop = (KopCombo.SelectedItem as TitleBlockOption)?.Id;
+        var keepNew = (NewSheetKopCombo.SelectedItem as TitleBlockOption)?.Id;
+        var wasSelected = _kopRows.Where(r => r.Selected).Select(r => r.UniqueId).ToHashSet();
+
+        _titleBlocks = types;
+        KopCombo.ItemsSource = types;
+        NewSheetKopCombo.ItemsSource = types;
+        KopCombo.SelectedItem = types.FirstOrDefault(t => t.Id == keepKop) ?? types.FirstOrDefault();
+        // Default kop sheet baru: yang paling banyak dipakai di model.
+        var mostUsed = sheets.Where(s => s.TitleBlock.Length > 0).GroupBy(s => s.TitleBlock)
+            .OrderByDescending(g => g.Count()).FirstOrDefault()?.Key;
+        NewSheetKopCombo.SelectedItem = types.FirstOrDefault(t => t.Id == keepNew)
+            ?? types.FirstOrDefault(t => t.Label == mostUsed) ?? types.FirstOrDefault();
+
+        _kopRows = sheets.Select(s => new KopRow
+        {
+            UniqueId = s.UniqueId, Number = s.Number, Name = s.Name, TitleBlock = s.TitleBlock,
+            Selected = wasSelected.Contains(s.UniqueId),
+        }).ToList();
+        ApplyKopFilter();
+    }
+
+    private void KopFilter_Changed(object sender, RoutedEventArgs e)
+    {
+        if (KopSearchHint is not null)
+            KopSearchHint.Visibility = KopSearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ApplyKopFilter();
+    }
+
+    private IEnumerable<KopRow> VisibleKopRows()
+    {
+        var q = KopSearchBox.Text.Trim();
+        return q.Length == 0 ? _kopRows : _kopRows.Where(r =>
+            r.Number.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            r.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            r.TitleBlock.Contains(q, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ApplyKopFilter()
+    {
+        KopGrid.ItemsSource = VisibleKopRows().ToList();
+        UpdateKopCount();
+    }
+
+    private void UpdateKopCount() => KopCount.Text = $"{_kopRows.Count(r => r.Selected)} dipilih dari {_kopRows.Count}";
+
+    private void KopSelectAll_Click(object sender, RoutedEventArgs e) => SetKopSelected(true);
+    private void KopClear_Click(object sender, RoutedEventArgs e) => SetKopSelected(false);
+
+    private void SetKopSelected(bool value)
+    {
+        // "Pilih Semua" mengikuti filter pencarian: cari dulu (mis. "LP"), lalu pilih semua hasilnya.
+        foreach (var r in value ? VisibleKopRows() : _kopRows) r.Selected = value;
+        KopGrid.Items.Refresh();
+        UpdateKopCount();
+    }
+
+    private async void KopGoTo_Click(object sender, RoutedEventArgs e)
+    {
+        if (KopGrid.SelectedItem is KopRow row) await GoToAsync(row.UniqueId);
+    }
+
+    private async void ChangeKop_Click(object sender, RoutedEventArgs e)
+    {
+        KopGrid.CommitEdit();
+        var targets = _kopRows.Where(r => r.Selected).ToList();
+        // Tanpa centang: pakai baris yang sedang di-highlight (ganti satu per satu).
+        if (targets.Count == 0) targets = KopGrid.SelectedItems.OfType<KopRow>().ToList();
+        if (targets.Count == 0) { Status("Centang sheet yang akan diganti kopnya."); return; }
+        if (KopCombo.SelectedItem is not TitleBlockOption kop) { Status("Pilih family kop dulu."); return; }
+
+        if (MessageBox.Show(this, $"Ganti kop {targets.Count} sheet menjadi:\n{kop.Label}?", "QA Revit",
+                MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        try
+        {
+            var ids = targets.Select(t => t.UniqueId).ToList();
+            var result = await _runner.Run(app => TitleBlockService.Change(app.ActiveUIDocument.Document, ids, kop.Id));
+            ShowApplyResult(result);
+            await RunQaAsync();
+        }
+        catch (Exception ex) { Error("Ganti kop gagal", ex); }
     }
 
     private async void RunQa_Click(object sender, RoutedEventArgs e) => await RunQaAsync();
@@ -203,7 +307,8 @@ public partial class DashboardWindow : Window
                 MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         try
         {
-            var result = await _runner.Run(app => SheetEditor.Apply(app.ActiveUIDocument.Document, selected));
+            var defaultKop = (NewSheetKopCombo.SelectedItem as TitleBlockOption)?.Id;
+            var result = await _runner.Run(app => SheetEditor.Apply(app.ActiveUIDocument.Document, selected, defaultTitleBlockTypeId: defaultKop));
             ShowApplyResult(result);
             await RunQaAsync();
         }

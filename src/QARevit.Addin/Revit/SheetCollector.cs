@@ -27,6 +27,11 @@ public static class SheetCollector
             .Cast<ScheduleSheetInstance>().Where(s => !s.IsTitleblockRevisionSchedule)
             .GroupBy(s => s.OwnerViewId).ToDictionary(g => g.Key, g => g.Count());
 
+        var titleBlocks = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_TitleBlocks)
+            .WhereElementIsNotElementType().OfType<FamilyInstance>()
+            .GroupBy(f => f.OwnerViewId)
+            .ToDictionary(g => g.Key, g => string.Join(" + ", g.Select(f => TitleBlockService.Label(f.Symbol)).Distinct()));
+
         var result = new List<SheetInfo>(sheets.Count);
         foreach (var sheet in sheets)
         {
@@ -41,6 +46,7 @@ public static class SheetCollector
                 CurrentRevision = sheet.get_Parameter(BuiltInParameter.SHEET_CURRENT_REVISION)?.AsString(),
                 CurrentRevisionDate = sheet.get_Parameter(BuiltInParameter.SHEET_CURRENT_REVISION_DATE)?.AsString(),
                 HasUnissuedRevisionClouds = sheetsWithUnissued.Contains(sheet.Id),
+                TitleBlock = titleBlocks.GetValueOrDefault(sheet.Id) ?? "",
             };
             foreach (var id in viewportIds)
                 if (doc.GetElement(id) is Viewport vp && doc.GetElement(vp.ViewId) is View v && v.Scale > 0)

@@ -24,6 +24,7 @@ public static class RegisterReader
     private static readonly string[] NameHeaders = { "SHEET NAME", "DRAWING NAME", "NAMA DRAWING", "DRAWING TITLE", "JUDUL", "TITLE", "NAME", "NAMA" };
     private static readonly string[] RevHeaders = { "CURRENT REVISION", "REVISION", "REV" };
     private static readonly string[] ScaleHeaders = { "SCALE", "SKALA" };
+    private static readonly string[] TitleBlockHeaders = { "TITLE BLOCK", "TITLEBLOCK", "FAMILY KOP", "KOP" };
     private static readonly string[] GuidHeaders = { "GUID", "UNIQUEID", "UNIQUE ID", "ELEMENT ID" };
 
     public static RegisterReadResult Read(string path) => Read(SimpleXlsx.ReadFirstSheet(path));
@@ -65,6 +66,7 @@ public static class RegisterReader
         var number = Find("Sheet Number");
         var name = Find("Sheet Name");
         var rev = Find("Current Revision");
+        var kop = Find("Title Block", "Titleblock", "Kop");
         var result = new RegisterReadResult { Format = RegisterFormat.SheetLink };
         if (number is null)
         {
@@ -85,6 +87,7 @@ public static class RegisterReader
                 Number = num,
                 Name = Cell(row, name),
                 Revision = NullIfEmpty(Cell(row, rev)),
+                TitleBlock = NullIfEmpty(Cell(row, kop)),
                 SourceRow = r + 1,
             });
         }
@@ -104,6 +107,7 @@ public static class RegisterReader
             var rev = Match(header, RevHeaders);
             var scale = Match(header, ScaleHeaders);
             var guid = Match(header, GuidHeaders);
+            var kop = Match(header, TitleBlockHeaders);
             for (var i = r + 1; i < rows.Count; i++)
             {
                 var num = Cell(rows[i], number).Trim();
@@ -115,6 +119,7 @@ public static class RegisterReader
                     Name = Cell(rows[i], name),
                     Revision = NullIfEmpty(Cell(rows[i], rev)),
                     Scale = NullIfEmpty(Cell(rows[i], scale)),
+                    TitleBlock = NullIfEmpty(Cell(rows[i], kop)),
                     SourceRow = i + 1,
                 });
             }

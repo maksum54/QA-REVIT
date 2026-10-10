@@ -3,6 +3,7 @@ using Autodesk.Revit.UI;
 using QARevit.Core.Model;
 using QARevit.Core.Register;
 
+
 namespace QARevit.Addin.Revit;
 
 public sealed class ApplyResult
@@ -35,7 +36,9 @@ public static class SheetEditor
     }
 
     /// <summary>Terapkan perubahan register (buat sheet, rename, renumber) dalam satu transaksi.</summary>
-    public static ApplyResult Apply(Document doc, IEnumerable<SheetChange> changes, string transactionName = "QA Revit - Sync Register")
+    /// <param name="defaultTitleBlockTypeId">Kop untuk sheet baru bila Excel tidak menyebut kop. Null = kop yang paling banyak dipakai.</param>
+    public static ApplyResult Apply(Document doc, IEnumerable<SheetChange> changes, string transactionName = "QA Revit - Sync Register",
+        long? defaultTitleBlockTypeId = null)
     {
         var result = new ApplyResult();
         var list = changes.Where(c => c.Applicable).ToList();
@@ -76,11 +79,16 @@ public static class SheetEditor
         var creates = list.Where(c => c.Kind == ChangeKind.CreateSheet).ToList();
         if (creates.Count > 0)
         {
-            var titleBlock = PreferredTitleBlock(doc);
+            var fallback = defaultTitleBlockTypeId is { } chosen ? new ElementId(chosen) : PreferredTitleBlock(doc);
+            var types = TitleBlockService.GetTypes(doc);
             foreach (var c in creates)
             {
                 try
                 {
+                    var requested = TitleBlockMatcher.Find(c.TitleBlock, types, t => t.Family, t => t.Type);
+                    if (!string.IsNullOrWhiteSpace(c.TitleBlock) && requested is null)
+                        result.Errors.Add($"{c.Number}: kop '{c.TitleBlock}' tidak ada di model, dipakai kop default.");
+                    var titleBlock = requested is null ? fallback : new ElementId(requested.Id);
                     var sheet = titleBlock == ElementId.InvalidElementId
                         ? ViewSheet.CreatePlaceholder(doc)
                         : ViewSheet.Create(doc, titleBlock);

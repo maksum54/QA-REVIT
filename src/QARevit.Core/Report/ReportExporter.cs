@@ -45,9 +45,9 @@ public static class ReportExporter
     /// <summary>Export register dari model dengan format yang bisa di-import kembali.</summary>
     public static void ExportRegister(string path, IReadOnlyList<SheetInfo> sheets)
     {
-        var rows = new List<IReadOnlyList<object?>> { new object?[] { "GUID", "DRAWING NUMBER", "NAMA DRAWING", "REV", "REV DATE", "SCALE" } };
+        var rows = new List<IReadOnlyList<object?>> { new object?[] { "GUID", "DRAWING NUMBER", "NAMA DRAWING", "REV", "REV DATE", "SCALE", "TITLE BLOCK" } };
         rows.AddRange(sheets.OrderBy(s => s.Number, StringComparer.Ordinal).Select(s => (IReadOnlyList<object?>)new object?[]
-            { s.UniqueId, s.Number, s.Name, s.CurrentRevision, s.CurrentRevisionDate, string.Join(", ", s.ViewScales.Distinct()) }));
+            { s.UniqueId, s.Number, s.Name, s.CurrentRevision, s.CurrentRevisionDate, string.Join(", ", s.ViewScales.Distinct()), s.TitleBlock }));
         SimpleXlsx.Write(path, new[] { ("Drawing List", (IEnumerable<IReadOnlyList<object?>>)rows) });
     }
 }

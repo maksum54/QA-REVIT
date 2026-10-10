@@ -52,7 +52,7 @@
         <!-- ===== Status bar ===== -->
         <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="20,7">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Text="QA Revit v0.2" Foreground="{StaticResource Muted}" />
+                <TextBlock DockPanel.Dock="Right" Text="QA Revit v0.3" Foreground="{StaticResource Muted}" />
                 <TextBlock x:Name="StatusText" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis" Text="Siap." />
             </DockPanel>
         </Border>
@@ -180,6 +180,9 @@
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal">
                                             <Button Style="{StaticResource PrimaryButton}" Content="Terapkan ke Revit" Click="ApplyRegister_Click" />
+                                            <TextBlock Text="Kop sheet baru" VerticalAlignment="Center" Margin="4,0,8,0" Foreground="{StaticResource Muted}" />
+                                            <ComboBox x:Name="NewSheetKopCombo" Width="230" DisplayMemberPath="Label" Margin="0,0,8,0" VerticalContentAlignment="Center"
+                                                      ToolTip="Dipakai untuk sheet baru dari Excel. Kolom KOP / TITLE BLOCK di Excel (jika ada) lebih diutamakan." />
                                             <Button Content="Pilih Semua" Click="SelectAllChanges_Click" />
                                             <Button Content="Kosongkan" Click="ClearChanges_Click" />
                                         </StackPanel>
@@ -202,7 +205,44 @@
                                     <DataGridTextColumn Header="NOMOR BARU" Binding="{Binding NewNumber}" Width="200" IsReadOnly="True" Foreground="#0F9488" />
                                     <DataGridTextColumn Header="JUDUL" Binding="{Binding Name}" Width="*" IsReadOnly="True" ElementStyle="{StaticResource WrapText}" />
                                     <DataGridTextColumn Header="JUDUL BARU" Binding="{Binding NewName}" Width="*" IsReadOnly="True" Foreground="#0F9488" ElementStyle="{StaticResource WrapText}" />
+                                    <DataGridTextColumn Header="KOP (EXCEL)" Binding="{Binding TitleBlock}" Width="150" IsReadOnly="True" ElementStyle="{StaticResource WrapText}" />
                                     <DataGridTextColumn Header="KETERANGAN" Binding="{Binding Message}" Width="1.5*" IsReadOnly="True" ElementStyle="{StaticResource WrapText}" Foreground="#475467" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </Border>
+                </TabItem>
+
+                <TabItem Header="▤  Kop / Title Block">
+                    <Border Style="{StaticResource Card}" Padding="0">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" Padding="14,12" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+                                <StackPanel>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,0,0,10"
+                                               Text="Centang sheet (satu per satu atau Pilih Semua), pilih family kop, lalu Ganti Kop. Kop lama diganti type-nya sehingga posisi dan isi parameter tetap; sheet tanpa kop diberi kop baru." />
+                                    <DockPanel>
+                                        <Grid DockPanel.Dock="Right" Width="220">
+                                            <TextBox x:Name="KopSearchBox" TextChanged="KopFilter_Changed" />
+                                            <TextBlock x:Name="KopSearchHint" Text="🔍  Cari sheet / kop…" Foreground="#98A2B3" Margin="10,0,0,0"
+                                                       VerticalAlignment="Center" IsHitTestVisible="False" />
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Kop baru" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource Muted}" />
+                                            <ComboBox x:Name="KopCombo" Width="260" DisplayMemberPath="Label" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                                            <Button Style="{StaticResource PrimaryButton}" Content="Ganti Kop Terpilih" Click="ChangeKop_Click" />
+                                            <Button Content="Pilih Semua" Click="KopSelectAll_Click" />
+                                            <Button Content="Kosongkan" Click="KopClear_Click" />
+                                            <TextBlock x:Name="KopCount" VerticalAlignment="Center" Foreground="{StaticResource Muted}" Margin="4,0,12,0" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+                            <DataGrid x:Name="KopGrid" AutoGenerateColumns="False" CanUserAddRows="False" MouseDoubleClick="KopGoTo_Click">
+                                <DataGrid.Columns>
+                                    <DataGridCheckBoxColumn Header="" Binding="{Binding Selected, UpdateSourceTrigger=PropertyChanged}" Width="36" />
+                                    <DataGridTextColumn Header="NOMOR SHEET" Binding="{Binding Number}" Width="230" IsReadOnly="True" FontWeight="SemiBold" />
+                                    <DataGridTextColumn Header="JUDUL" Binding="{Binding Name}" Width="2*" IsReadOnly="True" ElementStyle="{StaticResource WrapText}" />
+                                    <DataGridTextColumn Header="KOP SAAT INI" Binding="{Binding TitleBlockDisplay}" Width="1.5*" IsReadOnly="True" Foreground="#475467" ElementStyle="{StaticResource WrapText}" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </DockPanel>

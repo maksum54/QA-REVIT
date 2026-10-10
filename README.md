@@ -10,6 +10,11 @@ Add-in Revit 2025 untuk QA/QC sheet gambar ME (elektrikal & elektronik), terinsp
   - format manual (kolom `DRAWING NUMBER` + `NAMA DRAWING` / `DRAWING TITLE`, opsional `SCALE`, `REV`)
 - **Sync register ↔ model**: buat sheet yang belum ada, rename judul, renumber. Pencocokan memakai UniqueId,
   jadi nomor yang diganti tetap dikenali sebagai sheet yang sama.
+- **Ganti Kop (title block)**: tab *Kop / Title Block*. Centang sheet satu per satu, atau cari dulu
+  (mis. `LP`) lalu *Pilih Semua*, pilih family kop, *Ganti Kop Terpilih*. Kop lama diganti type-nya
+  (posisi dan parameter tetap); sheet tanpa kop diberi kop baru.
+- **Kop untuk sheet baru dari Excel**: pilih *Kop sheet baru* di tab Register. Jika Excel punya kolom
+  `KOP` / `TITLE BLOCK` (isi `Family : Type`, nama family, atau nama type), kop per baris itu yang dipakai.
 - **Ganti Stage massal** (mis. BD → DD) dengan preview.
 - **Dashboard**: Total / Passed / Failed / Pass rate, Go To sheet (double-click), Fix otomatis, Refresh.
 - **Advice**:

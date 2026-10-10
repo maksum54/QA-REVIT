@@ -14,6 +14,8 @@ public sealed class SheetChange
     public string? NewNumber { get; init; }
     public string Name { get; init; } = "";
     public string? NewName { get; init; }
+    /// <summary>Kop untuk sheet baru (dari Excel). Kosong = pakai kop default yang dipilih di dashboard.</summary>
+    public string? TitleBlock { get; init; }
     public string Message { get; init; } = "";
     public bool Selected { get; set; }
 
@@ -41,6 +43,7 @@ public static class RegisterComparer
                 changes.Add(new SheetChange
                 {
                     Kind = ChangeKind.CreateSheet, Number = e.Number, Name = e.Name, NewNumber = e.Number, NewName = e.Name,
+                    TitleBlock = e.TitleBlock,
                     Message = $"Ada di register (baris {e.SourceRow}) tetapi belum ada di model.", Selected = true,
                 });
                 continue;
