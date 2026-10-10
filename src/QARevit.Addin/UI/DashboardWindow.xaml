@@ -41,7 +41,8 @@
                             <TextBlock Text="Import Excel" />
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource GhostButton}" Content="Export Report" Click="ExportReport_Click" />
+                    <Button Style="{StaticResource GhostButton}" Content="Export Excel" Click="ExportRegister_Click"
+                            ToolTip="Drawing list (nomor, judul, NOTE, revisi) + hasil QA dalam satu file Excel. Bisa diedit lalu dilampirkan kembali di tab Advice AI." />
                     <Button Style="{StaticResource GhostButton}" Click="Settings_Click" Margin="0" ToolTip="Settings">
                         <Image Source="/QARevit;component/Resources/settings16.png" Width="16" />
                     </Button>
@@ -388,7 +389,7 @@
                                         <Button Content="Ringkas untuk laporan ke atasan" Click="Quick_Click" Padding="10,4" FontWeight="Normal" />
                                     </WrapPanel>
                                     <WrapPanel Margin="0,0,0,8">
-                                        <Button Content="⬇ Export Excel (drawing list + revisi + hasil QA)" Click="ExportRegister_Click" Padding="10,4"
+                                        <Button Content="⬇ Export Excel" Click="ExportRegister_Click" Padding="10,4"
                                                 ToolTip="Edit file ini di Excel (nomor, judul, NOTE, tanda x di kolom revisi), lalu lampirkan kembali di sini." />
                                         <Button Style="{StaticResource DarkButton}" Content="📎 Lampirkan Excel" Click="AttachExcel_Click" Padding="10,4"
                                                 ToolTip="Pilih Excel yang sudah diedit (atau seret filenya ke area chat). Perbedaannya dengan model ditampilkan dulu sebelum diterapkan." />

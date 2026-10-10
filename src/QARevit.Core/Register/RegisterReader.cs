@@ -22,7 +22,7 @@ public static class RegisterReader
 {
     private static readonly string[] NumberHeaders = { "SHEET NUMBER", "DRAWING NUMBER", "DRAWING NO", "DWG NO", "NO. DRAWING", "NOMOR", "NUMBER" };
     private static readonly string[] NameHeaders = { "SHEET NAME", "DRAWING NAME", "NAMA DRAWING", "DRAWING TITLE", "JUDUL", "TITLE", "NAME", "NAMA" };
-    private static readonly string[] RevHeaders = { "CURRENT REVISION", "REVISION", "REV" };
+    private static readonly string[] RevHeaders = { "CURRENT REVISION", "CURRENT REV", "REVISION", "REV" };
     private static readonly string[] ScaleHeaders = { "SCALE", "SKALA" };
     private static readonly string[] TitleBlockHeaders = { "TITLE BLOCK", "TITLEBLOCK", "FAMILY KOP", "KOP" };
     private static readonly string[] GuidHeaders = { "GUID", "UNIQUEID", "UNIQUE ID", "ELEMENT ID" };

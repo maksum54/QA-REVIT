@@ -151,7 +151,13 @@ public class RegisterTests
         };
         var revisions = new List<RevisionColumn> { new(3, "30-09-2026", "FIRST ISSUE"), new(4, "30-09-2026", "REVISION"), new(5, "12-10-2026", "REVISION") };
 
-        var rows = ReportExporter.DrawingListRows(sheets, states, revisions).Select(r => r.Select(c => c?.ToString() ?? "").ToArray()).ToList();
+        sheets[0].Parameters["ACT SHEET DISCIPLINE"] = sheets[1].Parameters["ACT SHEET DISCIPLINE"] = "ELECTRICAL & ELECTRONICS";
+        var path = Path.Combine(Path.GetTempPath(), $"qa-list-{Guid.NewGuid():N}.xlsx");
+        ReportExporter.ExportRegister(path, sheets, states, revisions);
+        var rows = SimpleXlsx.ReadFirstSheet(path);
+        File.Delete(path);
+        var h = rows.FindIndex(r => r.Contains("NOTE")) + 1; // baris data pertama: judul, header dan baris grup ada di atasnya
+        while (rows[h].Length < 3 || rows[h][2].Length == 0) h++;
         var entries = RegisterReader.Read(rows).Entries;
 
         Assert.Equal("B", entries[0].Revision); // kolom "Seq n · … · REVISION" tidak boleh terbaca sebagai kolom REV
@@ -159,11 +165,14 @@ public class RegisterTests
         Assert.Empty(RegisterComparer.PlanExtras(entries, states));
 
         // Edit di Excel: sheet 1 batal revisi Seq 5, sheet 2 dapat Seq 5 dan note baru.
-        var seq5 = Array.IndexOf(rows[0], revisions[2].Header);
-        var note = Array.IndexOf(rows[0], "NOTE");
-        rows[1][seq5] = "";
-        rows[2][seq5] = "x";
-        rows[2][note] = "UPDATE CABLE TRAY";
+        var seq5 = Array.IndexOf(rows.First(r => r.Contains("NOTE")), revisions[2].Header);
+        var note = Array.IndexOf(rows.First(r => r.Contains("NOTE")), "NOTE");
+        rows[h] = Pad(rows[h], seq5); rows[h + 1] = Pad(rows[h + 1], seq5);
+        rows[h][seq5] = "";
+        rows[h + 1][seq5] = "x";
+        rows[h + 1][note] = "UPDATE CABLE TRAY";
+
+        static string[] Pad(string[] row, int index) => row.Length > index ? row : row.Concat(Enumerable.Repeat("", index + 1 - row.Length)).ToArray();
 
         var extras = RegisterComparer.PlanExtras(RegisterReader.Read(rows).Entries, states);
         Assert.Equal(2, extras.Count);

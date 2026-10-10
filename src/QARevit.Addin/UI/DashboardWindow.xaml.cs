@@ -668,13 +668,13 @@ public partial class DashboardWindow : Window
     private void ExportRegister_Click(object sender, RoutedEventArgs e)
     {
         if (_report is null) return;
-        var dlg = new SaveFileDialog { Filter = "Excel (*.xlsx)|*.xlsx", FileName = "DRAWING_LIST_FROM_MODEL.xlsx" };
+        var dlg = new SaveFileDialog { Filter = "Excel (*.xlsx)|*.xlsx", FileName = $"DRAWING_LIST_{DateTime.Now:yyyyMMdd_HHmm}.xlsx" };
         if (dlg.ShowDialog(this) != true) return;
         try
         {
             ReportExporter.ExportRegister(dlg.FileName, _report.Sheets, _issues is null ? null : RevStates(),
-                _issues?.Revisions.Select(r => new RevisionColumn(r.Sequence, r.Date, r.Description)).ToList(), _report);
-            Status($"Register disimpan: {dlg.FileName}");
+                _issues?.Revisions.Select(r => new RevisionColumn(r.Sequence, r.Date, r.Description)).ToList(), _report, _changes, _lastAiAdvice);
+            Status($"Excel disimpan: {dlg.FileName}");
         }
         catch (Exception ex) { Error("Export gagal", ex); }
     }
@@ -827,19 +827,6 @@ public partial class DashboardWindow : Window
         }
         catch (Exception ex) { Error("Terapkan Excel gagal", ex); }
         return true;
-    }
-
-    private void ExportReport_Click(object sender, RoutedEventArgs e)
-    {
-        if (_report is null) return;
-        var dlg = new SaveFileDialog { Filter = "Excel (*.xlsx)|*.xlsx", FileName = $"QA_REPORT_{DateTime.Now:yyyyMMdd_HHmm}.xlsx" };
-        if (dlg.ShowDialog(this) != true) return;
-        try
-        {
-            ReportExporter.ExportQa(dlg.FileName, _report, _changes, _lastAiAdvice);
-            Status($"Laporan disimpan: {dlg.FileName}");
-        }
-        catch (Exception ex) { Error("Export gagal", ex); }
     }
 
     // ---------- Advice ----------
