@@ -3,7 +3,7 @@ using QARevit.Core.Model;
 
 namespace QARevit.Core.Register;
 
-public enum ChangeKind { CreateSheet, RenameSheet, RenumberSheet, MissingInRegister, StageMismatch, UpdateRevision }
+public enum ChangeKind { CreateSheet, RenameSheet, RenumberSheet, MissingInRegister, StageMismatch, UpdateRevision, Manual }
 
 /// <summary>Satu baris perbedaan register vs model; yang Applicable bisa diterapkan ke Revit.</summary>
 public sealed class SheetChange

@@ -143,6 +143,7 @@ public partial class DashboardWindow : Window
             _report = new RuleEngine().Run(sheets, _config);
             if (_register is not null)
             {
+                _planIsAi = false;
                 _changes = RegisterComparer.Compare(_register, sheets, _config);
                 // Excel hasil export juga membawa revisi dan NOTE per sheet: tampilkan bedanya sebagai baris sendiri.
                 var names = sheets.ToDictionary(s => s.UniqueId, s => s.Name);
@@ -632,6 +633,41 @@ public partial class DashboardWindow : Window
         catch (Exception ex) { Error("Fix gagal", ex); }
     }
 
+    private bool _planIsAi;
+
+    /// <summary>
+    /// Temuan tanpa Fix otomatis (mis. REV_NOTE kosong) diusulkan perbaikannya oleh AI. Usulan divalidasi, lalu
+    /// ditampilkan di tab Register untuk diperiksa dan dicentang sebelum diterapkan.
+    /// </summary>
+    private async void FixWithAi_Click(object sender, RoutedEventArgs e)
+    {
+        if (_report is null) return;
+        if (_advice is null) { Settings_Click(sender, e); return; }
+        var candidates = AiFixPlanner.Candidates(_report);
+        if (candidates.Count == 0) { Status("Tidak ada temuan Warning/Error yang butuh usulan AI."); return; }
+
+        var button = (System.Windows.Controls.Button)sender;
+        button.IsEnabled = false;
+        try
+        {
+            Status($"Meminta usulan AI untuk {candidates.Count} temuan…");
+            var answer = await _advice.ProposeFixesAsync(_report);
+            var changes = AiFixPlanner.ToChanges(AiFixPlanner.Parse(answer), _report.Sheets, _config, out var rejected);
+
+            _changes = changes;
+            _planIsAi = true;
+            DiffGrid.ItemsSource = _changes;
+            var manual = changes.Count(c => c.Kind == ChangeKind.Manual);
+            RegisterInfo.Text = $"Usulan AI untuk {candidates.Count} temuan: {changes.Count - manual} bisa diterapkan, {manual} harus dikerjakan manual" +
+                                (rejected.Count > 0 ? $", {rejected.Count} ditolak karena tidak valid ({string.Join(" ", rejected.Take(3))})" : "") +
+                                ". Ini tebakan AI dari judul dan note sheet lain: periksa tiap baris, lepas centang yang salah, lalu klik 'Terapkan ke Revit'.";
+            Tabs.SelectedIndex = 1;
+            Status("Usulan AI siap diperiksa di tab Register Excel.");
+        }
+        catch (Exception ex) { Error("Usulan AI gagal", ex); }
+        finally { button.IsEnabled = true; }
+    }
+
     private async void FixRevisions_Click(object sender, RoutedEventArgs e)
     {
         if (_report is null) return;
@@ -685,6 +721,7 @@ public partial class DashboardWindow : Window
     private void PreviewStage_Click(object sender, RoutedEventArgs e)
     {
         if (_report is null || StageCombo.SelectedItem is not StageItem stage) return;
+        _planIsAi = false;
         _changes = RegisterComparer.PlanStageChange(_report.Sheets, stage.Code);
         DiffGrid.ItemsSource = _changes;
         RegisterInfo.Text = $"Preview ganti stage ke {stage.Label}: {_changes.Count} sheet akan di-renumber. Klik 'Terapkan ke Revit'.";
@@ -851,6 +888,9 @@ public partial class DashboardWindow : Window
         var sheets = ExcelPlan(onlySelected).Sheets;
         // Refresh di tengah mencentang ulang semua baris, jadi catat dulu baris revisi yang tidak dicentang.
         var skipped = _changes.Where(c => onlySelected && c.Extra is not null && !c.Selected).Select(c => c.UniqueId).ToHashSet();
+        // Usulan AI tidak berasal dari Excel, jadi tidak bisa dihitung ulang setelah refresh: pegang dari awal.
+        var aiExtras = _planIsAi ? ExcelPlan(onlySelected).Extras : null;
+        _planIsAi = false;
         {
             if (sheets.Count > 0)
             {
@@ -862,7 +902,12 @@ public partial class DashboardWindow : Window
             }
 
             // Revisi dan note dihitung ulang setelah nomor baru / sheet baru masuk, supaya sheet itu ikut terisi.
-            var extras = ExcelPlan().Extras.Where(x => !skipped.Contains(x.UniqueId)).ToList();
+            var extras = aiExtras ?? ExcelPlan().Extras.Where(x => !skipped.Contains(x.UniqueId)).ToList();
+            if (aiExtras is not null && _register is null)
+            {
+                _changes = new List<SheetChange>(); // usulan AI sudah dipakai, kosongkan daftarnya
+                DiffGrid.ItemsSource = _changes;
+            }
             if (extras.Count > 0 && _issues is { } data)
             {
                 var bySeq = data.Revisions.ToDictionary(r => r.Sequence);

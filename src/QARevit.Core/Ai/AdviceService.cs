@@ -70,6 +70,10 @@ public sealed class AdviceService
         return await AskAsync(_context + AdvicePrompt, ct).ConfigureAwait(false);
     }
 
+    /// <summary>Minta usulan perbaikan (JSON) untuk temuan yang tidak punya Fix otomatis. Tidak mengubah riwayat chat.</summary>
+    public Task<string> ProposeFixesAsync(QaReport report, CancellationToken ct = default) =>
+        _client.CompleteAsync(AiFixPlanner.SystemPrompt, new[] { new ChatMessage("user", AiFixPlanner.BuildPrompt(report)) }, ct);
+
     /// <summary>Tanya lanjutan (chat) dengan konteks QA terakhir.</summary>
     public Task<string> ChatAsync(string question, CancellationToken ct = default)
     {
