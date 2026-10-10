@@ -16,6 +16,11 @@
     <ProjectReference Include="..\QARevit.Core\QARevit.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Resource: dipakai XAML (pack URI). EmbeddedResource: dipakai ikon ribbon. -->
+    <Resource Include="Resources\*.png" />
+    <EmbeddedResource Include="Resources\*.png" LogicalName="QARevit.Resources.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="QARevit.addin" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

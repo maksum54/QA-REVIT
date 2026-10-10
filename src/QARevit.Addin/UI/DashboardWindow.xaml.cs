@@ -70,6 +70,16 @@ public partial class DashboardWindow : Window
             PassedText.Text = _report.Passed.ToString();
             FailedText.Text = _report.Failed.ToString();
             RateText.Text = $"{_report.PassRate:P0}";
+            RateBar.Value = _report.PassRate * 100;
+            RateBar.Foreground = (System.Windows.Media.Brush)FindResource(
+                _report.PassRate >= 0.9 ? "Good" : _report.PassRate >= 0.6 ? "Warn" : "Bad");
+            ErrorCount.Text = _report.Issues.Count(i => i.Severity == Severity.Error).ToString();
+            WarnCount.Text = _report.Issues.Count(i => i.Severity == Severity.Warning).ToString();
+            InfoCount.Text = _report.Issues.Count(i => i.Severity == Severity.Info).ToString();
+            var stage = _report.Sheets.Select(x => SheetCode.TryParse(x.Number)?.Stage).Where(x => x is not null)
+                .GroupBy(x => x).OrderByDescending(g => g.Count()).FirstOrDefault()?.Key;
+            StageChip.Visibility = stage is null ? Visibility.Collapsed : Visibility.Visible;
+            StageText.Text = stage is null ? "" : $"STAGE {stage} · {_config.StageName(stage)}";
             ApplyFilter();
             DiffGrid.ItemsSource = _changes;
             AdviceBox.Text = RuleAdvice.Build(_report, _changes);
@@ -81,7 +91,14 @@ public partial class DashboardWindow : Window
 
     private async void RunQa_Click(object sender, RoutedEventArgs e) => await RunQaAsync();
 
-    private void Filter_Changed(object sender, RoutedEventArgs e) => ApplyFilter();
+    private void Filter_Changed(object sender, RoutedEventArgs e)
+    {
+        if (SearchHint is not null) SearchHint.Visibility = SearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ApplyFilter();
+    }
+
+    private void ChatInput_TextChanged(object sender, RoutedEventArgs e) =>
+        ChatHint.Visibility = ChatInput.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     private void ApplyFilter()
     {
@@ -139,6 +156,8 @@ public partial class DashboardWindow : Window
     }
 
     // ---------- Register ----------
+
+    public void StartImport() => ImportExcel_Click(this, new RoutedEventArgs());
 
     private async void ImportExcel_Click(object sender, RoutedEventArgs e)
     {

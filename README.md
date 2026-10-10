@@ -17,6 +17,12 @@ Add-in Revit 2025 untuk QA/QC sheet gambar ME (elektrikal & elektronik), terinsp
   - AI: Claude (Anthropic) atau API custom (endpoint kompatibel OpenAI), plus chat tanya-jawab
 - **Export** laporan QA dan register dari model ke Excel.
 
+## Tampilan
+- Ribbon **QA Revit**: tombol *QA Dashboard*, *Import Excel*, dan *Settings*, masing-masing dengan ikon.
+- Dashboard: header navy dengan chip stage aktif, kartu KPI (Total, Passed, Failed, Pass rate + progress bar,
+  jumlah Error/Warning/Info), badge warna per severity, dan tab Hasil QA / Register Excel / Advice AI.
+- Ikon dibuat dari `tools/make_icons.py` (`python tools/make_icons.py` untuk membuat ulang).
+
 ## Sistem penomoran
 ```
 KRF-DWG-BD-ME-01.1-LP-4401[.2]
