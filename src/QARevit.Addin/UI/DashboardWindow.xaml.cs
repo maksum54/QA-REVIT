@@ -104,7 +104,7 @@ public partial class DashboardWindow : Window
             StageText.Text = stage is null ? "" : $"STAGE {stage} · {_config.StageName(stage)}";
             ApplyFilter();
             DiffGrid.ItemsSource = _changes;
-            AdviceBox.Text = RuleAdvice.Build(_report, _changes);
+            ShowRuleAdvice();
             _advice?.SetContext(_report, _config, _changes);
             Status($"QA selesai {DateTime.Now:HH:mm:ss}: {_report.Issues.Count} temuan dari {_report.Total} sheet.");
         }
@@ -483,7 +483,8 @@ public partial class DashboardWindow : Window
         if (HideInfoCheck.IsChecked == true) items = items.Where(i => i.Severity != Severity.Info);
         var q = SearchBox.Text.Trim();
         if (q.Length > 0)
-            items = items.Where(i => i.SheetNumber.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            items = items.Where(i => i.RuleId.Equals(q, StringComparison.OrdinalIgnoreCase) ||
+                                     i.SheetNumber.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                                      i.Message.Contains(q, StringComparison.OrdinalIgnoreCase));
         IssuesGrid.ItemsSource = items.ToList();
     }
@@ -615,9 +616,64 @@ public partial class DashboardWindow : Window
 
     // ---------- Advice ----------
 
-    private void RuleAdvice_Click(object sender, RoutedEventArgs e)
+    private AdviceView? _adviceView;
+
+    /// <summary>Ringkasan dan kartu per aturan (offline). Chat AI di bawahnya tidak ikut dihapus.</summary>
+    private void ShowRuleAdvice()
     {
-        if (_report is not null) AdviceBox.Text = RuleAdvice.Build(_report, _changes);
+        if (_report is null) return;
+        var view = _adviceView ??= new AdviceView(this);
+        RulePanel.Children.Clear();
+        RulePanel.Children.Add(view.Summary(_report));
+        foreach (var g in RuleAdvice.Groups(_report))
+            RulePanel.Children.Add(view.RuleCard(g, ShowRuleInResults, id => _ = GoToAsync(id)));
+        var applicable = _changes.Count(c => c.Applicable);
+        if (applicable > 0)
+            RulePanel.Children.Add(view.Bubble($"Register Excel berbeda dengan model di {applicable} sheet. Lihat tab Register Excel.", fromUser: false, muted: true));
+    }
+
+    private void ShowRuleInResults(string ruleId)
+    {
+        SearchBox.Text = ruleId;
+        Tabs.SelectedIndex = 0;
+    }
+
+    private FrameworkElement AddBubble(string text, bool fromUser, bool muted = false)
+    {
+        var view = _adviceView ??= new AdviceView(this);
+        if (ChatPanel.Children.Count == 0) ChatPanel.Children.Add(view.SectionTitle("Percakapan dengan AI"));
+        var bubble = view.Bubble(text, fromUser, muted);
+        ChatPanel.Children.Add(bubble);
+        AdviceScroll.ScrollToEnd();
+        return bubble;
+    }
+
+    /// <summary>Tampilkan pertanyaan, penanda "sedang menulis", lalu jawabannya.</summary>
+    private async Task<string> AskInChatAsync(string shown, Func<Task<string>> ask)
+    {
+        AddBubble(shown, fromUser: true);
+        var waiting = AddBubble("AI sedang menulis…", fromUser: false, muted: true);
+        try
+        {
+            var answer = await ask();
+            ChatPanel.Children.Remove(waiting);
+            AddBubble(answer, fromUser: false);
+            return answer;
+        }
+        finally { ChatPanel.Children.Remove(waiting); }
+    }
+
+    private void ClearChat_Click(object sender, RoutedEventArgs e)
+    {
+        ChatPanel.Children.Clear();
+        if (_report is not null) _advice?.SetContext(_report, _config, _changes);
+        AdviceScroll.ScrollToTop();
+    }
+
+    private async void Quick_Click(object sender, RoutedEventArgs e)
+    {
+        ChatInput.Text = (sender as System.Windows.Controls.Button)?.Content as string ?? "";
+        await SendChatAsync();
     }
 
     private async void AiAdvice_Click(object sender, RoutedEventArgs e)
@@ -627,8 +683,8 @@ public partial class DashboardWindow : Window
         await WithBusy(async () =>
         {
             Status("Meminta advice AI…");
-            _lastAiAdvice = await _advice.GenerateAdviceAsync(_report, _config, _changes);
-            AdviceBox.Text = _lastAiAdvice;
+            _lastAiAdvice = await AskInChatAsync("Buat rencana perbaikan dari hasil QA ini.",
+                () => _advice.GenerateAdviceAsync(_report, _config, _changes));
             Status("Advice AI selesai.");
         });
     }
@@ -648,19 +704,16 @@ public partial class DashboardWindow : Window
         await WithBusy(async () =>
         {
             ChatInput.Clear();
-            AdviceBox.AppendText($"\n\n▶ {q}\n");
-            var answer = await _advice.ChatAsync(q);
-            AdviceBox.AppendText(answer + "\n");
-            AdviceBox.ScrollToEnd();
+            await AskInChatAsync(q, () => _advice.ChatAsync(q));
         });
     }
 
     private async Task WithBusy(Func<Task> work)
     {
-        AiButton.IsEnabled = SendButton.IsEnabled = false;
+        AiButton.IsEnabled = SendButton.IsEnabled = QuickPanel.IsEnabled = false;
         try { await work(); }
         catch (Exception ex) { Error("AI gagal", ex); }
-        finally { AiButton.IsEnabled = SendButton.IsEnabled = true; }
+        finally { AiButton.IsEnabled = SendButton.IsEnabled = QuickPanel.IsEnabled = true; }
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e)

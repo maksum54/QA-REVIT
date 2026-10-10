@@ -366,7 +366,7 @@
                                 <DockPanel>
                                     <Image DockPanel.Dock="Left" Source="/QARevit;component/Resources/ai32.png" Width="28" Height="28" Margin="0,0,10,0" />
                                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                                        <Button Content="Advice Aturan" Click="RuleAdvice_Click" />
+                                        <Button Content="Bersihkan Chat" Click="ClearChat_Click" />
                                         <Button x:Name="AiButton" Style="{StaticResource PrimaryButton}" Content="✦ Generate Advice AI" Click="AiAdvice_Click" Margin="0" />
                                     </StackPanel>
                                     <StackPanel VerticalAlignment="Center">
@@ -376,18 +376,29 @@
                                 </DockPanel>
                             </Border>
                             <Border DockPanel.Dock="Bottom" Padding="14,10" Background="#F8FAFC" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" CornerRadius="0,0,10,10">
-                                <DockPanel>
+                                <StackPanel>
+                                    <WrapPanel x:Name="QuickPanel" Margin="0,0,0,8">
+                                        <Button Content="Apa yang harus dikerjakan dulu?" Click="Quick_Click" Padding="10,4" FontWeight="Normal" />
+                                        <Button Content="Sheet mana yang belum siap issue?" Click="Quick_Click" Padding="10,4" FontWeight="Normal" />
+                                        <Button Content="Apa yang bisa diperbaiki sekali klik?" Click="Quick_Click" Padding="10,4" FontWeight="Normal" />
+                                        <Button Content="Ringkas untuk laporan ke atasan" Click="Quick_Click" Padding="10,4" FontWeight="Normal" />
+                                    </WrapPanel>
+                                    <DockPanel>
                                     <Button DockPanel.Dock="Right" x:Name="SendButton" Style="{StaticResource DarkButton}" Content="Kirim ➤" Click="Send_Click" Margin="8,0,0,0" />
                                     <Grid>
                                         <TextBox x:Name="ChatInput" Height="34" KeyDown="ChatInput_KeyDown" TextChanged="ChatInput_TextChanged" />
-                                        <TextBlock x:Name="ChatHint" Text="Tanya AI… contoh: sheet mana yang harus diperbaiki dulu sebelum issue DC?"
+                                        <TextBlock x:Name="ChatHint" Text="Tanya AI tentang hasil QA ini, lalu Enter…"
                                                    Foreground="#98A2B3" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
                                     </Grid>
-                                </DockPanel>
+                                    </DockPanel>
+                                </StackPanel>
                             </Border>
-                            <TextBox x:Name="AdviceBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                                     FontFamily="Cascadia Mono, Consolas" FontSize="12.5" AcceptsReturn="True" BorderThickness="0"
-                                     Padding="16,12" VerticalContentAlignment="Top" Background="White" />
+                            <ScrollViewer x:Name="AdviceScroll" VerticalScrollBarVisibility="Auto" Background="#F8FAFC">
+                                <StackPanel Margin="16,14" MaxWidth="900" HorizontalAlignment="Left">
+                                    <StackPanel x:Name="RulePanel" />
+                                    <StackPanel x:Name="ChatPanel" />
+                                </StackPanel>
+                            </ScrollViewer>
                         </DockPanel>
                     </Border>
                 </TabItem>
