@@ -135,4 +135,41 @@ public class RegisterTests
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public void Drawing_list_with_note_and_revisions_roundtrips_and_detects_edits()
+    {
+        var sheets = new List<SheetInfo>
+        {
+            new() { UniqueId = "u1", Number = "ARW-DWG-BD-ME-02-EP-4103", Name = "CABLE TRAY #3", CurrentRevision = "B" },
+            new() { UniqueId = "u2", Number = "ARW-DWG-BD-ME-02-EP-4104", Name = "CABLE TRAY #4", CurrentRevision = "A" },
+        };
+        var states = new List<SheetRevState>
+        {
+            new("u1", sheets[0].Number, "CHANGE ROUTE", new[] { 3, 5 }),
+            new("u2", sheets[1].Number, "", new[] { 3 }),
+        };
+        var revisions = new List<RevisionColumn> { new(3, "30-09-2026", "FIRST ISSUE"), new(4, "30-09-2026", "REVISION"), new(5, "12-10-2026", "REVISION") };
+
+        var rows = ReportExporter.DrawingListRows(sheets, states, revisions).Select(r => r.Select(c => c?.ToString() ?? "").ToArray()).ToList();
+        var entries = RegisterReader.Read(rows).Entries;
+
+        Assert.Equal("B", entries[0].Revision); // kolom "Seq n · … · REVISION" tidak boleh terbaca sebagai kolom REV
+        Assert.Equal(new[] { 3, 5 }, entries[0].RevisionSeqs!.OrderBy(x => x));
+        Assert.Empty(RegisterComparer.PlanExtras(entries, states));
+
+        // Edit di Excel: sheet 1 batal revisi Seq 5, sheet 2 dapat Seq 5 dan note baru.
+        var seq5 = Array.IndexOf(rows[0], revisions[2].Header);
+        var note = Array.IndexOf(rows[0], "NOTE");
+        rows[1][seq5] = "";
+        rows[2][seq5] = "x";
+        rows[2][note] = "UPDATE CABLE TRAY";
+
+        var extras = RegisterComparer.PlanExtras(RegisterReader.Read(rows).Entries, states);
+        Assert.Equal(2, extras.Count);
+        Assert.Equal(new[] { 3 }, extras[0].NewRevisionSeqs);
+        Assert.Null(extras[0].NewNote);
+        Assert.Equal(new[] { 3, 5 }, extras[1].NewRevisionSeqs!.OrderBy(x => x));
+        Assert.Equal("UPDATE CABLE TRAY", extras[1].NewNote);
+    }
 }

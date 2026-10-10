@@ -22,6 +22,12 @@ public sealed class SheetChange
     public bool Applicable => Kind is ChangeKind.CreateSheet or ChangeKind.RenameSheet or ChangeKind.RenumberSheet;
 }
 
+/// <summary>REV_NOTE dan revisi (nomor urut) yang sekarang ada di satu sheet.</summary>
+public sealed record SheetRevState(string UniqueId, string Number, string Note, IReadOnlyCollection<int> RevisionSeqs);
+
+/// <summary>Perubahan NOTE / revisi satu sheet supaya sama dengan Excel. Null = bagian itu tidak berubah.</summary>
+public sealed record ExtraChange(string UniqueId, string Number, string? NewNote, IReadOnlyCollection<int>? NewRevisionSeqs, string Message);
+
 public static class RegisterComparer
 {
     /// <summary>Cocokkan per UniqueId dulu (deteksi nomor berubah), lalu per nomor sheet.</summary>
@@ -120,6 +126,33 @@ public static class RegisterComparer
 
     private static string? Majority(IEnumerable<string?> values) =>
         values.Where(v => v is not null).GroupBy(v => v).OrderByDescending(g => g.Count()).FirstOrDefault()?.Key;
+
+    /// <summary>Beda NOTE dan revisi per sheet antara Excel dan model. Sheet dicocokkan per UniqueId, lalu per nomor.</summary>
+    public static List<ExtraChange> PlanExtras(IReadOnlyList<RegisterEntry> register, IReadOnlyList<SheetRevState> sheets)
+    {
+        var byId = sheets.ToDictionary(s => s.UniqueId, StringComparer.OrdinalIgnoreCase);
+        var byNumber = sheets.GroupBy(s => Key(s.Number)).ToDictionary(g => g.Key, g => g.First());
+        var list = new List<ExtraChange>();
+        foreach (var e in register)
+        {
+            SheetRevState? sheet = null;
+            if (e.UniqueId is not null) byId.TryGetValue(e.UniqueId, out sheet);
+            sheet ??= byNumber.GetValueOrDefault(Key(e.Number));
+            if (sheet is null) continue;
+
+            var note = e.Note is not null && e.Note != sheet.Note.Trim() ? e.Note : null;
+            var seqs = e.RevisionSeqs is not null && !e.RevisionSeqs.SetEquals(sheet.RevisionSeqs) ? e.RevisionSeqs : null;
+            if (note is null && seqs is null) continue;
+
+            var parts = new List<string>();
+            if (seqs is not null)
+                parts.Add("revisi " + string.Join(" ", seqs.Except(sheet.RevisionSeqs).OrderBy(x => x).Select(x => $"+Seq {x}")
+                    .Concat(sheet.RevisionSeqs.Except(seqs).OrderBy(x => x).Select(x => $"−Seq {x}"))));
+            if (note is not null) parts.Add($"note '{sheet.Note}' → '{note}'");
+            list.Add(new ExtraChange(sheet.UniqueId, sheet.Number, note, seqs, string.Join(", ", parts)));
+        }
+        return list;
+    }
 
     private static string Key(string number) => number.Trim().ToUpperInvariant();
     private static string Normalize(string name) => Rules.TitleText.NormalizeWhitespace(name).ToUpperInvariant();

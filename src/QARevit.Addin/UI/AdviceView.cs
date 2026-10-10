@@ -12,7 +12,7 @@ namespace QARevit.Addin.UI;
 public sealed class AdviceView
 {
     private const int MaxSheetChips = 8;
-    private static readonly Regex Inline = new(@"(\*\*.+?\*\*|`[^`]+`)");
+    private static readonly Regex Inline = new(@"(\*\*.+?\*\*|`[^`]+`|\*[^*\s][^*]*\*)");
     private static readonly Regex Numbered = new(@"^(\d+)[.)]\s+(.*)$");
 
     private readonly FrameworkElement _owner;
@@ -105,7 +105,7 @@ public sealed class AdviceView
     };
 
     /// <summary>Gelembung chat. Jawaban AI dirender dari markdown sederhana dan bisa disalin.</summary>
-    public FrameworkElement Bubble(string text, bool fromUser, bool muted = false)
+    public FrameworkElement Bubble(string text, bool fromUser, bool muted = false, params (string Label, Action Run)[] actions)
     {
         var content = new StackPanel();
         if (fromUser || muted)
@@ -114,6 +114,18 @@ public sealed class AdviceView
         else
         {
             foreach (var block in Markdown(text)) content.Children.Add(block);
+            if (actions.Length > 0)
+            {
+                var bar = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+                foreach (var (label, run) in actions)
+                {
+                    var button = new Button { Content = label, Padding = new Thickness(12, 6, 12, 6) };
+                    if (bar.Children.Count == 0) button.Style = (Style)_owner.FindResource("PrimaryButton");
+                    button.Click += (_, _) => run();
+                    bar.Children.Add(button);
+                }
+                content.Children.Add(bar);
+            }
             var copy = new TextBlock { Text = "⧉ Salin", Foreground = B("Muted"), FontSize = 11, Cursor = System.Windows.Input.Cursors.Hand,
                 HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
             copy.MouseLeftButtonUp += (_, _) =>
@@ -174,6 +186,7 @@ public sealed class AdviceView
         {
             if (part.Length == 0) continue;
             if (part.StartsWith("**") && part.Length > 4) block.Inlines.Add(new Run(part[2..^2]) { FontWeight = FontWeights.Bold });
+            else if (part.StartsWith('*') && part.EndsWith('*') && part.Length > 2) block.Inlines.Add(new Run(part[1..^1]) { FontStyle = FontStyles.Italic });
             else if (part.StartsWith('`') && part.Length > 2) block.Inlines.Add(new Run(part[1..^1]) { FontFamily = new FontFamily("Cascadia Mono, Consolas"), Background = B("PageBg") });
             else block.Inlines.Add(new Run(part));
         }

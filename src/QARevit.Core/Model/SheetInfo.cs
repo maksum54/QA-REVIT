@@ -27,5 +27,9 @@ public sealed class RegisterEntry
     public string? Scale { get; set; }
     /// <summary>Kop yang diminta untuk sheet ini (kolom opsional KOP / TITLE BLOCK di Excel).</summary>
     public string? TitleBlock { get; set; }
+    /// <summary>REV_NOTE dari kolom NOTE. Null = Excel tidak punya kolom itu (tidak diubah).</summary>
+    public string? Note { get; set; }
+    /// <summary>Nomor urut revisi yang dicentang di kolom "Seq N ...". Null = Excel tidak punya kolom revisi.</summary>
+    public HashSet<int>? RevisionSeqs { get; set; }
     public int SourceRow { get; set; }
 }

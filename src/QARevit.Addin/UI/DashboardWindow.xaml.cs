@@ -672,10 +672,161 @@ public partial class DashboardWindow : Window
         if (dlg.ShowDialog(this) != true) return;
         try
         {
-            ReportExporter.ExportRegister(dlg.FileName, _report.Sheets);
+            ReportExporter.ExportRegister(dlg.FileName, _report.Sheets, _issues is null ? null : RevStates(),
+                _issues?.Revisions.Select(r => new RevisionColumn(r.Sequence, r.Date, r.Description)).ToList(), _report);
             Status($"Register disimpan: {dlg.FileName}");
         }
         catch (Exception ex) { Error("Export gagal", ex); }
+    }
+
+    // ---------- Excel yang sudah diedit → model ----------
+
+    /// <summary>REV_NOTE dan revisi tiap sheet sekarang, memakai nomor urut revisi seperti di kolom Excel.</summary>
+    private List<SheetRevState> RevStates()
+    {
+        if (_issues is null) return new();
+        var seqOf = _issues.Revisions.ToDictionary(r => r.Id, r => r.Sequence);
+        return _issueRows.Select(r => new SheetRevState(r.UniqueId, r.Number, r.Note,
+            r.RevisionIds.Where(seqOf.ContainsKey).Select(id => seqOf[id]).ToList())).ToList();
+    }
+
+    /// <summary>Semua beda Excel terlampir vs model: sheet (buat / nomor / judul) dan revisi + note.</summary>
+    private (List<SheetChange> Sheets, List<ExtraChange> Extras) ExcelPlan() =>
+        (_changes.Where(c => c.Applicable).ToList(),
+            _register is null ? new List<ExtraChange>() : RegisterComparer.PlanExtras(_register, RevStates()));
+
+    private async void AttachExcel_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog { Filter = "Excel (*.xlsx)|*.xlsx", Title = "Pilih drawing list Excel yang sudah diedit" };
+        if (dlg.ShowDialog(this) == true) await AttachExcelAsync(dlg.FileName);
+    }
+
+    private async void Advice_Drop(object sender, DragEventArgs e)
+    {
+        var file = (e.Data.GetData(DataFormats.FileDrop) as string[])?
+            .FirstOrDefault(f => f.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase));
+        if (file is null) { Status("Seret file Excel (.xlsx)."); return; }
+        await AttachExcelAsync(file);
+    }
+
+    private async Task AttachExcelAsync(string path)
+    {
+        try
+        {
+            var name = System.IO.Path.GetFileName(path);
+            var read = RegisterReader.Read(path);
+            _register = read.Entries;
+            RegisterInfo.Text = $"{name} — format {read.Format}, {read.Entries.Count} drawing." +
+                                (read.Warnings.Count > 0 ? "  ⚠ " + string.Join(" ", read.Warnings) : "");
+            await RunQaAsync();
+            AddBubble($"📎 {name}  ({read.Entries.Count} drawing)", fromUser: true);
+            if (read.Entries.Count == 0)
+            {
+                AddBubble("Tidak ada drawing yang terbaca dari file itu. " + string.Join(" ", read.Warnings), fromUser: false);
+                return;
+            }
+            ShowExcelPlan();
+        }
+        catch (Exception ex) { Error("Baca Excel gagal", ex); }
+    }
+
+    private void ShowExcelPlan()
+    {
+        var (sheets, extras) = ExcelPlan();
+        var missing = _changes.Count(c => c.Kind == ChangeKind.MissingInRegister);
+        var missingNote = missing > 0 ? $"\n\n*{missing} sheet ada di model tetapi tidak ada di Excel. Sheet itu tidak dihapus.*" : "";
+        if (sheets.Count + extras.Count == 0)
+        {
+            AddBubble("Excel sudah sama dengan model: tidak ada yang perlu diubah." + missingNote, fromUser: false);
+            return;
+        }
+
+        var sb = new System.Text.StringBuilder($"## Excel berbeda dengan model di {sheets.Count + extras.Count} hal\n");
+        void Count(ChangeKind kind, string label)
+        {
+            var n = sheets.Count(c => c.Kind == kind);
+            if (n > 0) sb.Append($"- **{n}** {label}\n");
+        }
+        Count(ChangeKind.CreateSheet, "sheet baru dibuat");
+        Count(ChangeKind.RenumberSheet, "nomor sheet diganti");
+        Count(ChangeKind.RenameSheet, "judul diganti");
+        if (extras.Count > 0) sb.Append($"- **{extras.Count}** sheet berubah revisi atau note\n");
+
+        const int max = 12;
+        sb.Append("\n### Rincian\n");
+        var lines = sheets.Select(c => c.Kind switch
+            {
+                ChangeKind.CreateSheet => $"**{c.Number}** dibuat: {c.Name}",
+                ChangeKind.RenumberSheet => $"**{c.Number}** → nomor {c.NewNumber}",
+                _ => $"**{c.Number}** → judul {c.NewName}",
+            })
+            .Concat(extras.Select(x => $"**{x.Number}** → {x.Message}")).ToList();
+        foreach (var line in lines.Take(max)) sb.Append($"- {line}\n");
+        if (lines.Count > max) sb.Append($"- … dan {lines.Count - max} lainnya (lihat tab Register Excel)\n");
+        sb.Append(missingNote);
+
+        FrameworkElement? bubble = null;
+        bubble = AddBubble(sb.ToString(), fromUser: false, actions: new (string, Action)[]
+        {
+            ("✔ Terapkan semua ke Revit", async () => { bubble!.IsEnabled = false; if (!await ApplyExcelAsync()) bubble.IsEnabled = true; }),
+            ("Lihat di tab Register Excel", () => Tabs.SelectedIndex = 1),
+        });
+    }
+
+    /// <returns>False kalau dibatalkan di konfirmasi.</returns>
+    private async Task<bool> ApplyExcelAsync()
+    {
+        var (sheets, firstExtras) = ExcelPlan();
+        if (MessageBox.Show(this, $"Terapkan {sheets.Count + firstExtras.Count} perubahan dari Excel ke model?", "QA Revit",
+                MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return false;
+        var applied = 0;
+        var errors = new List<string>();
+        try
+        {
+            if (sheets.Count > 0)
+            {
+                var defaultKop = (NewSheetKopCombo.SelectedItem as TitleBlockOption)?.Id;
+                var r = await _runner.Run(app => SheetEditor.Apply(app.ActiveUIDocument.Document, sheets, defaultTitleBlockTypeId: defaultKop));
+                applied += r.Applied;
+                errors.AddRange(r.Errors);
+                await RunQaAsync();
+            }
+
+            // Revisi dan note dihitung ulang setelah nomor baru / sheet baru masuk, supaya sheet itu ikut terisi.
+            var extras = ExcelPlan().Extras;
+            if (extras.Count > 0 && _issues is { } data)
+            {
+                var bySeq = data.Revisions.ToDictionary(r => r.Sequence);
+                var states = extras.Select(x =>
+                {
+                    if (x.NewRevisionSeqs is null) return new SheetState(x.UniqueId, null, null, x.NewNote);
+                    foreach (var unknown in x.NewRevisionSeqs.Where(s => !bySeq.ContainsKey(s)))
+                        errors.Add($"{x.Number}: Seq {unknown} tidak ada di model. Buat dulu revisinya di Sheet Issues/Revisions.");
+                    var revs = x.NewRevisionSeqs.Where(bySeq.ContainsKey).Select(s => bySeq[s]).ToList();
+                    var dates = revs.Select(r => r.Date).ToHashSet();
+                    // Kolom sheet list ikut disamakan dengan revisi yang baru.
+                    var columns = data.Columns.Count == 0 ? null
+                        : data.Columns.Where(c => !c.IsFree && dates.Contains(c.Heading)).Select(c => c.Number).ToList();
+                    return new SheetState(x.UniqueId, revs.Select(r => r.Id).ToList(), columns, x.NewNote);
+                }).ToList();
+                var approver = IssueApvBox.Text.Trim();
+                var r = await _runner.Run(app => IssueService.SetStates(app.ActiveUIDocument.Document, states, data.Columns, approver));
+                applied += r.Applied;
+                errors.AddRange(r.Errors);
+                await RunQaAsync();
+            }
+
+            var (leftSheets, leftExtras) = ExcelPlan();
+            var left = leftSheets.Count + leftExtras.Count;
+            var text = $"**{applied} perubahan diterapkan ke model.** " +
+                       (left == 0 ? "Model sekarang sama dengan Excel." : $"Masih ada {left} beda yang belum bisa disamakan.");
+            if (errors.Count > 0)
+                text += "\n\n### Tidak berhasil\n" + string.Join("\n", errors.Take(10).Select(x => $"- {x}")) +
+                        (errors.Count > 10 ? $"\n- … dan {errors.Count - 10} lainnya" : "");
+            AddBubble(text + "\n\n*Bisa dibatalkan dengan Undo di Revit.*", fromUser: false);
+        }
+        catch (Exception ex) { Error("Terapkan Excel gagal", ex); }
+        return true;
     }
 
     private void ExportReport_Click(object sender, RoutedEventArgs e)
@@ -715,11 +866,11 @@ public partial class DashboardWindow : Window
         Tabs.SelectedIndex = 0;
     }
 
-    private FrameworkElement AddBubble(string text, bool fromUser, bool muted = false)
+    private FrameworkElement AddBubble(string text, bool fromUser, bool muted = false, (string Label, Action Run)[]? actions = null)
     {
         var view = _adviceView ??= new AdviceView(this);
         if (ChatPanel.Children.Count == 0) ChatPanel.Children.Add(view.SectionTitle("Percakapan dengan AI"));
-        var bubble = view.Bubble(text, fromUser, muted);
+        var bubble = view.Bubble(text, fromUser, muted, actions ?? Array.Empty<(string, Action)>());
         ChatPanel.Children.Add(bubble);
         AdviceScroll.ScrollToEnd();
         return bubble;

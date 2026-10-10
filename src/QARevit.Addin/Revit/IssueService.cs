@@ -34,7 +34,7 @@ public sealed class IssueRow
 }
 
 /// <summary>Keadaan yang diinginkan untuk satu sheet. Null = bagian itu tidak diubah.</summary>
-public sealed record SheetState(string UniqueId, IReadOnlyCollection<long>? RevisionIds, IReadOnlyCollection<string>? Columns);
+public sealed record SheetState(string UniqueId, IReadOnlyCollection<long>? RevisionIds, IReadOnlyCollection<string>? Columns, string? Note = null);
 
 public sealed record IssueData(List<RevisionOption> Revisions, List<IssueColumn> Columns, List<IssueRow> Sheets,
     long ScheduleId, string ScheduleName, string Approver);
@@ -233,6 +233,7 @@ public static class IssueService
                         SetText(sheet, "REV_NOTE", ""); // note lama milik revisi yang sudah bukan revisi terakhir
                     }
                 }
+                if (state.Note is not null) SetText(sheet, "REV_NOTE", state.Note);
                 result.Applied++;
             }
             catch (Exception ex) { result.Errors.Add($"{sheet.SheetNumber}: {ex.Message}"); }

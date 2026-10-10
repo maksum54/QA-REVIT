@@ -387,6 +387,12 @@
                                         <Button Content="Apa yang bisa diperbaiki sekali klik?" Click="Quick_Click" Padding="10,4" FontWeight="Normal" />
                                         <Button Content="Ringkas untuk laporan ke atasan" Click="Quick_Click" Padding="10,4" FontWeight="Normal" />
                                     </WrapPanel>
+                                    <WrapPanel Margin="0,0,0,8">
+                                        <Button Content="⬇ Export Excel (drawing list + revisi + hasil QA)" Click="ExportRegister_Click" Padding="10,4"
+                                                ToolTip="Edit file ini di Excel (nomor, judul, NOTE, tanda x di kolom revisi), lalu lampirkan kembali di sini." />
+                                        <Button Style="{StaticResource DarkButton}" Content="📎 Lampirkan Excel" Click="AttachExcel_Click" Padding="10,4"
+                                                ToolTip="Pilih Excel yang sudah diedit (atau seret filenya ke area chat). Perbedaannya dengan model ditampilkan dulu sebelum diterapkan." />
+                                    </WrapPanel>
                                     <DockPanel>
                                     <Button DockPanel.Dock="Right" x:Name="SendButton" Style="{StaticResource DarkButton}" Content="Kirim ➤" Click="Send_Click" Margin="8,0,0,0" />
                                     <Grid>
@@ -397,7 +403,7 @@
                                     </DockPanel>
                                 </StackPanel>
                             </Border>
-                            <ScrollViewer x:Name="AdviceScroll" VerticalScrollBarVisibility="Auto" Background="#F8FAFC">
+                            <ScrollViewer x:Name="AdviceScroll" VerticalScrollBarVisibility="Auto" Background="#F8FAFC" AllowDrop="True" Drop="Advice_Drop">
                                 <StackPanel Margin="16,14" MaxWidth="900" HorizontalAlignment="Left">
                                     <StackPanel x:Name="RulePanel" />
                                     <StackPanel x:Name="ChatPanel" />

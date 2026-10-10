@@ -26,6 +26,9 @@ public static class RegisterReader
     private static readonly string[] ScaleHeaders = { "SCALE", "SKALA" };
     private static readonly string[] TitleBlockHeaders = { "TITLE BLOCK", "TITLEBLOCK", "FAMILY KOP", "KOP" };
     private static readonly string[] GuidHeaders = { "GUID", "UNIQUEID", "UNIQUE ID", "ELEMENT ID" };
+    private static readonly string[] NoteHeaders = { "REV NOTE", "REV_NOTE", "NOTE", "CATATAN" };
+    private static readonly System.Text.RegularExpressions.Regex SeqHeader = new(@"^SEQ\s*(\d+)");
+    private static readonly string[] Unticked = { "", "-", "0", "NO", "TIDAK", "FALSE" };
 
     public static RegisterReadResult Read(string path) => Read(SimpleXlsx.ReadFirstSheet(path));
 
@@ -108,6 +111,10 @@ public static class RegisterReader
             var scale = Match(header, ScaleHeaders);
             var guid = Match(header, GuidHeaders);
             var kop = Match(header, TitleBlockHeaders);
+            var note = Match(header, NoteHeaders);
+            // Satu kolom per revisi ("Seq 3 · 30-09-2026 · FIRST ISSUE"): sel terisi = revisi ada di sheet.
+            var seqs = header.Select((h, c) => (Match: SeqHeader.Match(h), Column: c)).Where(x => x.Match.Success)
+                .Select(x => (Seq: int.Parse(x.Match.Groups[1].Value), x.Column)).ToList();
             for (var i = r + 1; i < rows.Count; i++)
             {
                 var num = Cell(rows[i], number).Trim();
@@ -120,6 +127,9 @@ public static class RegisterReader
                     Revision = NullIfEmpty(Cell(rows[i], rev)),
                     Scale = NullIfEmpty(Cell(rows[i], scale)),
                     TitleBlock = NullIfEmpty(Cell(rows[i], kop)),
+                    Note = note is null ? null : Cell(rows[i], note).Trim(),
+                    RevisionSeqs = seqs.Count == 0 ? null : seqs
+                        .Where(s => !Unticked.Contains(Cell(rows[i], s.Column).Trim().ToUpperInvariant())).Select(s => s.Seq).ToHashSet(),
                     SourceRow = i + 1,
                 });
             }
