@@ -51,8 +51,9 @@ public sealed class RevisionCloudRule : IQaRule
                     yield return new QaIssue
                     {
                         RuleId = Id, Severity = Severity.Info, SheetNumber = s.Number, UniqueId = s.UniqueId,
-                        Message = $"Masih ada revision cloud milik revisi lama ({string.Join(", ", stale.Select(r => r.Number))}) di sheet revisi {current.Number}.",
-                        Advice = "Hapus atau sembunyikan cloud revisi lama, atau pindahkan ke revisi terakhir bila itu perubahan baru.",
+                        Message = $"Masih ada revision cloud milik revisi lama di sheet revisi {current.Number}: {Where(stale)}.",
+                        ElementIds = stale.SelectMany(r => r.CloudIds).ToList(),
+                        Advice = "Go To Sheet membuka tempat cloud itu dan memilihnya. Hapus atau sembunyikan cloud revisi lama, atau ganti parameter Revision-nya bila itu perubahan baru.",
                     };
                 continue;
             }
@@ -60,8 +61,8 @@ public sealed class RevisionCloudRule : IQaRule
                 ? new QaIssue
                 {
                     RuleId = Id, Severity = Severity.Warning, SheetNumber = s.Number, UniqueId = s.UniqueId,
-                    Message = $"Cloud tidak sinkron: sheet sudah revisi {current.Number} ({current.Date}) tetapi revision cloud masih milik revisi " +
-                              $"{string.Join(", ", stale.Select(r => r.Number))}.",
+                    Message = $"Cloud tidak sinkron: sheet sudah revisi {current.Number} ({current.Date}) tetapi revision cloud masih milik revisi lama: {Where(stale)}.",
+                    ElementIds = stale.SelectMany(r => r.CloudIds).ToList(),
                     Advice = $"Pilih cloud di sheet/view, ganti parameter Revision ke Seq {current.Sequence}, atau gambar cloud baru untuk perubahan revisi {current.Number}.",
                     Fix = FixKind.MoveClouds,
                     FixValue = $"Pindahkan cloud ke revisi {current.Number}",
@@ -74,6 +75,10 @@ public sealed class RevisionCloudRule : IQaRule
                 };
         }
     }
+
+    /// <summary>"1 cloud revisi A di view 'X'": supaya cloud-nya bisa ditemukan.</summary>
+    private static string Where(IEnumerable<SheetRevision> revisions) => string.Join("; ", revisions.Select(r =>
+        $"{r.Clouds} cloud revisi {r.Number}" + (r.CloudPlaces.Count > 0 ? " " + string.Join(" dan ", r.CloudPlaces) : "")));
 }
 
 /// <summary>Isian revisi di kop (SUB_REV, REV_NOTE, APVD) diketik manual, jadi harus dicek terhadap revisi di sheet.</summary>

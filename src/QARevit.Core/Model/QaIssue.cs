@@ -25,6 +25,8 @@ public sealed class QaIssue
     public FixKind Fix { get; init; }
     /// <summary>Nilai baru untuk perbaikan (nama atau nomor baru).</summary>
     public string? FixValue { get; init; }
+    /// <summary>Elemen penyebab temuan (mis. revision cloud); Go To membuka view-nya dan memilih elemen ini.</summary>
+    public IReadOnlyList<long> ElementIds { get; init; } = Array.Empty<long>();
 
     public bool CanFix => Fix != FixKind.None && !string.IsNullOrEmpty(FixValue);
 }

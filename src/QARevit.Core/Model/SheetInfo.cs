@@ -31,7 +31,13 @@ public sealed class SheetInfo
 }
 
 /// <summary>Satu revisi di sheet: nomor urut proyek, huruf di sheet, tanggal, dan jumlah revision cloud-nya di sheet + view di dalamnya.</summary>
-public sealed record SheetRevision(int Sequence, string Number, string Date, string Description, int Clouds);
+public sealed record SheetRevision(int Sequence, string Number, string Date, string Description, int Clouds)
+{
+    /// <summary>ElementId cloud-cloud itu, untuk dipilih di Revit.</summary>
+    public IReadOnlyList<long> CloudIds { get; init; } = Array.Empty<long>();
+    /// <summary>Tempat cloud-nya: "di sheet" atau "di view 'nama'".</summary>
+    public IReadOnlyList<string> CloudPlaces { get; init; } = Array.Empty<string>();
+}
 
 public sealed class RegisterEntry
 {

@@ -14,10 +14,21 @@ public sealed class ApplyResult
 
 public static class SheetEditor
 {
-    public static void GoTo(UIApplication app, string uniqueId)
+    /// <param name="elementIds">Elemen penyebab temuan: view pemiliknya dibuka (bukan sheet-nya) dan elemennya dipilih.</param>
+    public static void GoTo(UIApplication app, string uniqueId, IReadOnlyList<long>? elementIds = null)
     {
         var uidoc = app.ActiveUIDocument;
-        if (uidoc.Document.GetElement(uniqueId) is ViewSheet sheet)
+        var doc = uidoc.Document;
+        var elements = (elementIds ?? Array.Empty<long>()).Select(id => doc.GetElement(new ElementId(id))).Where(e => e is not null).ToList();
+        if (elements.Count > 0 && doc.GetElement(elements[0].OwnerViewId) is View owner)
+        {
+            uidoc.ActiveView = owner;
+            var inView = elements.Where(e => e.OwnerViewId == owner.Id).Select(e => e.Id).ToList();
+            uidoc.Selection.SetElementIds(inView);
+            uidoc.ShowElements(inView);
+            return;
+        }
+        if (doc.GetElement(uniqueId) is ViewSheet sheet)
             uidoc.ActiveView = sheet;
     }
 

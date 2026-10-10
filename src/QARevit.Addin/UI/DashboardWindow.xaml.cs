@@ -583,7 +583,7 @@ public partial class DashboardWindow : Window
 
     private async void GoTo_Click(object sender, RoutedEventArgs e)
     {
-        if (IssuesGrid.SelectedItem is QaIssue { UniqueId: { } id }) await GoToAsync(id);
+        if (IssuesGrid.SelectedItem is QaIssue { UniqueId: { } id } issue) await GoToAsync(id, issue.ElementIds);
     }
 
     private async void DiffGoTo_Click(object sender, RoutedEventArgs e)
@@ -591,9 +591,9 @@ public partial class DashboardWindow : Window
         if (DiffGrid.SelectedItem is SheetChange { UniqueId: { } id }) await GoToAsync(id);
     }
 
-    private async Task GoToAsync(string uniqueId)
+    private async Task GoToAsync(string uniqueId, IReadOnlyList<long>? elementIds = null)
     {
-        try { await _runner.Run(app => SheetEditor.GoTo(app, uniqueId)); }
+        try { await _runner.Run(app => SheetEditor.GoTo(app, uniqueId, elementIds)); }
         catch (Exception ex) { Error("Tidak bisa membuka sheet", ex); }
     }
 

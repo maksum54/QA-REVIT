@@ -147,7 +147,7 @@ public class RuleTests
         var stale = Issued("KRF-DWG-BD-ME-01.1-LP-1101", "LIGHTING LAYOUT OFFICE GROUND FLOOR", A with { Clouds = 1 }, B with { Clouds = 0 });
         var issue = Assert.Single(Run(stale).Issues, i => i.RuleId == "REV-CLOUD");
         Assert.Equal(Severity.Warning, issue.Severity);
-        Assert.Contains("masih milik revisi A", issue.Message);
+        Assert.Contains("1 cloud revisi A", issue.Message);
 
         var none = Issued("KRF-DWG-BD-ME-01.1-LP-1101", "LIGHTING LAYOUT OFFICE GROUND FLOOR", A, B with { Clouds = 0 });
         Assert.Equal(Severity.Info, Assert.Single(Run(none).Issues, i => i.RuleId == "REV-CLOUD").Severity);

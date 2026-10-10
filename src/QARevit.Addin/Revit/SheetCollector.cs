@@ -16,15 +16,18 @@ public static class SheetCollector
 
         var sheetsWithUnissued = new HashSet<ElementId>();
         // Jumlah cloud per (sheet, revisi): cloud di sheet itu sendiri atau di view yang ditaruh di sheet.
-        var clouds = new Dictionary<(ElementId Sheet, ElementId Revision), int>();
+        var clouds = new Dictionary<(ElementId Sheet, ElementId Revision), List<(long Id, string Place)>>();
+        var cloudCategory = new ElementId(BuiltInCategory.OST_RevisionClouds);
         foreach (var cloud in new FilteredElementCollector(doc).OfClass(typeof(RevisionCloud)).Cast<RevisionCloud>())
         {
-            if (doc.GetElement(cloud.RevisionId) is not Revision rev) continue;
-            var owner = cloud.OwnerViewId;
-            var sheetId = doc.GetElement(owner) is ViewSheet ? owner : viewToSheet.GetValueOrDefault(owner);
+            if (doc.GetElement(cloud.RevisionId) is not Revision rev || doc.GetElement(cloud.OwnerViewId) is not View view) continue;
+            var sheetId = view is ViewSheet ? view.Id : viewToSheet.GetValueOrDefault(view.Id);
             if (sheetId is null) continue;
-            clouds[(sheetId, rev.Id)] = clouds.GetValueOrDefault((sheetId, rev.Id)) + 1;
             if (!rev.Issued) sheetsWithUnissued.Add(sheetId);
+            // Cloud yang tidak tercetak (disembunyikan di view, kategori mati, atau revisinya di-set Hidden) tidak dihitung.
+            if (rev.Visibility == RevisionVisibility.Hidden || cloud.IsHidden(view) || view.GetCategoryHidden(cloudCategory)) continue;
+            if (!clouds.TryGetValue((sheetId, rev.Id), out var list)) clouds[(sheetId, rev.Id)] = list = new();
+            list.Add((cloud.Id.Value, view is ViewSheet ? "di sheet" : $"di view '{view.Name}'"));
         }
 
         var (_, issueColumns) = IssueService.FindColumns(doc,
@@ -57,9 +60,15 @@ public static class SheetCollector
                 HasUnissuedRevisionClouds = sheetsWithUnissued.Contains(sheet.Id),
                 TitleBlock = titleBlocks.GetValueOrDefault(sheet.Id) ?? "",
                 TitleBlockCount = titleBlockCount.GetValueOrDefault(sheet.Id),
-                Revisions = IssueService.RevisionsOn(doc, sheet).Select(r => new SheetRevision(r.SequenceNumber,
-                    sheet.GetRevisionNumberOnSheet(r.Id) ?? "", r.RevisionDate ?? "", r.Description ?? "",
-                    clouds.GetValueOrDefault((sheet.Id, r.Id)))).ToList(),
+                Revisions = IssueService.RevisionsOn(doc, sheet).Select(r =>
+                {
+                    var found = clouds.GetValueOrDefault((sheet.Id, r.Id)) ?? new();
+                    return new SheetRevision(r.SequenceNumber, sheet.GetRevisionNumberOnSheet(r.Id) ?? "", r.RevisionDate ?? "",
+                        r.Description ?? "", found.Count)
+                    {
+                        CloudIds = found.Select(c => c.Id).ToList(), CloudPlaces = found.Select(c => c.Place).Distinct().ToList(),
+                    };
+                }).ToList(),
                 TickedIssueDates = issueColumns.Count == 0 ? null : issueColumns
                     .Where(c => sheet.LookupParameter(c.ParamName)?.AsInteger() == 1)
                     .Select(c => c.IsFree ? $"kolom {c.Number} tanpa tanggal" : c.Heading).ToList(),
