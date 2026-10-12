@@ -121,6 +121,7 @@ public static class RuleAdvice
         ["REV-DATE"] = "Tanggal revisi mundur atau sheet belum di-issue",
         ["SHEET-SETUP"] = "Sheet tidak masuk drawing list atau kop bermasalah",
         ["DUP-TITLE"] = "Judul sheet kembar",
+        ["VIEW-OUTSIDE"] = "Gambar keluar dari kop",
     };
 
     public static IReadOnlyList<RuleAdviceGroup> Groups(QaReport report) =>

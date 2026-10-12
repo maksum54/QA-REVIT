@@ -227,3 +227,21 @@ public sealed class DuplicateTitleRule : IQaRule
                 };
     }
 }
+
+/// <summary>View atau schedule yang ditaruh melewati batas kop akan terpotong atau keluar kertas saat dicetak.</summary>
+public sealed class OutsideTitleBlockRule : IQaRule
+{
+    public string Id => "VIEW-OUTSIDE";
+
+    public IEnumerable<QaIssue> Check(IReadOnlyList<SheetInfo> sheets, QaConfig cfg)
+    {
+        foreach (var s in sheets.Where(s => s.OutsideTitleBlock.Count > 0))
+            yield return new QaIssue
+            {
+                RuleId = Id, Severity = Severity.Warning, SheetNumber = s.Number, UniqueId = s.UniqueId,
+                Message = "Gambar melebihi kop: " + string.Join("; ", s.OutsideTitleBlock) + ".",
+                Advice = "Go To Sheet memilih view-nya. Geser view ke dalam kop, perkecil crop region, atau ganti skala.",
+                ElementIds = s.OutsideTitleBlockIds,
+            };
+    }
+}

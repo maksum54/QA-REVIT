@@ -183,3 +183,20 @@ public class RuleTests
         Assert.Equal(2, report.Issues.Count(i => i.RuleId == "DUP-TITLE"));
     }
 }
+
+public class OutsideTitleBlockTests
+{
+    [Fact]
+    public void View_outside_title_block_is_flagged_with_its_element()
+    {
+        var sheet = new SheetInfo
+        {
+            UniqueId = "u1", Number = "KRF-DWG-BD-ME-01.1-SO-4101", Name = "ENLARGED RECEPTACLE LAYOUT", PlacedViewCount = 1,
+            OutsideTitleBlock = { "view 'RECEPTACLE' keluar 85 mm di kiri" }, OutsideTitleBlockIds = { 123 },
+        };
+        var issue = Assert.Single(new RuleEngine().Run(new[] { sheet }, QaConfig.LoadDefault()).Issues, i => i.RuleId == "VIEW-OUTSIDE");
+        Assert.Equal(Severity.Warning, issue.Severity);
+        Assert.Contains("85 mm di kiri", issue.Message);
+        Assert.Equal(new long[] { 123 }, issue.ElementIds);
+    }
+}

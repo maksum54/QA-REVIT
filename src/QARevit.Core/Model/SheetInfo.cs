@@ -28,6 +28,9 @@ public sealed class SheetInfo
     /// <summary>Isi "1 APV" .. "6 APV", urut baris revisi di kop.</summary>
     public List<string>? Approvers { get; set; }
     public int? TitleBlockCount { get; set; }
+    /// <summary>View / schedule di sheet yang keluar dari batas kop, mis. "view 'X' keluar 85 mm di kiri".</summary>
+    public List<string> OutsideTitleBlock { get; set; } = new();
+    public List<long> OutsideTitleBlockIds { get; set; } = new();
 }
 
 /// <summary>Satu revisi di sheet: nomor urut proyek, huruf di sheet, tanggal, dan jumlah revision cloud-nya di sheet + view di dalamnya.</summary>

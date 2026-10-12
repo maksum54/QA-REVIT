@@ -33,6 +33,7 @@ public sealed class RuleEngine
         new RevisionDateRule(),
         new SheetSetupRule(),
         new DuplicateTitleRule(),
+        new OutsideTitleBlockRule(),
     };
 
     public QaReport Run(IReadOnlyList<SheetInfo> sheets, QaConfig cfg)

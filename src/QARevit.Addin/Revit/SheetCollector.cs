@@ -80,6 +80,7 @@ public static class SheetCollector
             foreach (var id in viewportIds)
                 if (doc.GetElement(id) is Viewport vp && doc.GetElement(vp.ViewId) is View v && v.Scale > 0)
                     info.ViewScales.Add($"1 : {v.Scale}");
+            FindOutsideTitleBlock(doc, sheet, info);
 
             foreach (Parameter p in sheet.Parameters)
             {
@@ -91,6 +92,36 @@ public static class SheetCollector
             result.Add(info);
         }
         return result.OrderBy(s => s.Number, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>Catat view dan schedule yang kotaknya melewati batas luar kop (toleransi 1 mm).</summary>
+    private static void FindOutsideTitleBlock(Document doc, ViewSheet sheet, SheetInfo info)
+    {
+        const double mm = 304.8, tolerance = 1.0;
+        var frames = new FilteredElementCollector(doc, sheet.Id).OfCategory(BuiltInCategory.OST_TitleBlocks)
+            .WhereElementIsNotElementType().Select(tb => tb.get_BoundingBox(sheet)).Where(b => b is not null).ToList();
+        if (frames.Count == 0) return;
+        var (x0, y0, x1, y1) = (frames.Min(b => b.Min.X), frames.Min(b => b.Min.Y), frames.Max(b => b.Max.X), frames.Max(b => b.Max.Y));
+
+        void Check(ElementId id, string label, XYZ min, XYZ max)
+        {
+            var sides = new[] { ("kiri", x0 - min.X), ("kanan", max.X - x1), ("bawah", y0 - min.Y), ("atas", max.Y - y1) }
+                .Where(s => s.Item2 * mm > tolerance).Select(s => $"{Math.Round(s.Item2 * mm)} mm di {s.Item1}").ToList();
+            if (sides.Count == 0) return;
+            info.OutsideTitleBlock.Add($"{label} keluar {string.Join(", ", sides)}");
+            info.OutsideTitleBlockIds.Add(id.Value);
+        }
+
+        foreach (var id in sheet.GetAllViewports())
+            if (doc.GetElement(id) is Viewport vp)
+            {
+                var box = vp.GetBoxOutline();
+                Check(id, $"view '{doc.GetElement(vp.ViewId)?.Name}'", box.MinimumPoint, box.MaximumPoint);
+            }
+        foreach (var schedule in new FilteredElementCollector(doc, sheet.Id).OfClass(typeof(ScheduleSheetInstance))
+                     .Cast<ScheduleSheetInstance>().Where(s => !s.IsTitleblockRevisionSchedule))
+            if (schedule.get_BoundingBox(sheet) is { } box)
+                Check(schedule.Id, $"schedule '{schedule.Name}'", box.Min, box.Max);
     }
 
     /// <summary>Isi semua parameter bernama sama; null bila parameternya tidak ada di sheet.</summary>
